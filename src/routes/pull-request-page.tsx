@@ -123,6 +123,12 @@ export function PullRequestPage() {
     void setSearchParams(nextParams);
   }
 
+  function handleSelectDescription() {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("path");
+    void setSearchParams(nextParams);
+  }
+
   if (Number.isNaN(number) || !owner || !repo) {
     return (
       <main className="flex h-screen items-center justify-center px-6 text-sm text-rose-300">
@@ -162,6 +168,7 @@ export function PullRequestPage() {
                 files={files}
                 selectedPath={selectedPath}
                 onSelect={handleSelectFile}
+                onSelectDescription={handleSelectDescription}
               />
             )}
           </aside>

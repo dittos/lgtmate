@@ -68,9 +68,7 @@ export function FileDiffPanel({
     <div className="h-full px-4 py-4">
       <div className="mb-3 flex items-center justify-between gap-3 px-2">
         <div className="min-w-0">
-          <h2 className="truncate text-base font-semibold text-white">
-            {file.filename}
-          </h2>
+          <h2 className="truncate text-base font-semibold text-white">{file.filename}</h2>
           <p className="mt-1 text-xs uppercase tracking-[0.12em] text-zinc-500">
             {formatChangeType(file.status)}
             {file.previous_filename ? ` from ${file.previous_filename}` : ""}

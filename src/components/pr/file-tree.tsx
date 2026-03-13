@@ -1,4 +1,4 @@
-import { FileCode2, FolderTree, Minus, Plus } from "lucide-react";
+import { FileCode2, FileText, FolderTree, Minus, Plus } from "lucide-react";
 import type { GithubPullRequestFileNode } from "@/lib/github";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +13,48 @@ type CompressedDirectoryNode = {
   label: string;
   node: FileTreeNode;
 };
+
+function getFileChangeClasses(changeType: string, isSelected: boolean) {
+  switch (changeType) {
+    case "ADDED":
+      return isSelected
+        ? "bg-emerald-400/14 text-emerald-50 ring-1 ring-emerald-300/25"
+        : "text-emerald-100 hover:bg-emerald-400/10 hover:text-emerald-50";
+    case "DELETED":
+      return isSelected
+        ? "bg-rose-400/14 text-rose-50 ring-1 ring-rose-300/25"
+        : "text-rose-100 hover:bg-rose-400/10 hover:text-rose-50";
+    default:
+      return isSelected
+        ? "bg-amber-300/14 text-white ring-1 ring-amber-200/20"
+        : "text-zinc-300 hover:bg-white/6 hover:text-white";
+  }
+}
+
+function getFileTypeBadge(changeType: string) {
+  switch (changeType) {
+    case "ADDED":
+      return {
+        label: "A",
+        className: "border-emerald-300/20 bg-emerald-400/10 text-emerald-200"
+      };
+    case "DELETED":
+      return {
+        label: "D",
+        className: "border-rose-300/20 bg-rose-400/10 text-rose-200"
+      };
+    case "RENAMED":
+      return {
+        label: "R",
+        className: "border-sky-300/20 bg-sky-400/10 text-sky-200"
+      };
+    default:
+      return {
+        label: "M",
+        className: "border-white/10 bg-white/5 text-zinc-300"
+      };
+  }
+}
 
 function buildFileTree(files: GithubPullRequestFileNode[]) {
   const root: FileTreeNode = {
@@ -82,11 +124,13 @@ function compressDirectoryNode(node: FileTreeNode): CompressedDirectoryNode {
 export function FileTree({
   files,
   selectedPath,
-  onSelect
+  onSelect,
+  onSelectDescription
 }: {
   files: GithubPullRequestFileNode[];
   selectedPath: string | null;
   onSelect(path: string): void;
+  onSelectDescription(): void;
 }) {
   const nodes = buildFileTree(files);
 
@@ -100,6 +144,19 @@ export function FileTree({
         <span>{files.length}</span>
       </div>
       <div className="space-y-1">
+        <button
+          type="button"
+          className={cn(
+            "flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left text-sm transition-colors",
+            selectedPath === null
+              ? "bg-amber-300/14 text-white ring-1 ring-amber-200/20"
+              : "text-zinc-300 hover:bg-white/6 hover:text-white"
+          )}
+          onClick={onSelectDescription}
+        >
+          <FileText className="size-3.5 shrink-0 text-zinc-500" />
+          <span className="truncate">Description</span>
+        </button>
         {nodes.map((node) => (
           <FileTreeNodeView
             key={node.name}
@@ -126,6 +183,7 @@ function FileTreeNodeView({
   onSelect(path: string): void;
 }) {
   const isDirectory = node.children.length > 0 && node.path === null;
+  const isSelected = selectedPath === node.path;
 
   if (isDirectory) {
     const compressed = compressDirectoryNode(node);
@@ -154,20 +212,39 @@ function FileTreeNodeView({
     );
   }
 
+  const fileTypeBadge = node.file ? getFileTypeBadge(node.file.changeType) : null;
+
   return (
     <button
       type="button"
       className={cn(
         "flex w-full items-center justify-between gap-3 rounded-xl px-2 py-2 text-left text-sm transition-colors",
-        selectedPath === node.path
-          ? "bg-amber-300/14 text-white ring-1 ring-amber-200/20"
-          : "text-zinc-300 hover:bg-white/6 hover:text-white"
+        node.file ? getFileChangeClasses(node.file.changeType, isSelected) : null
       )}
       style={{ paddingLeft: `${depth * 14 + 8}px` }}
       onClick={() => node.path && onSelect(node.path)}
     >
       <span className="flex min-w-0 items-center gap-2">
-        <FileCode2 className="size-3.5 shrink-0 text-zinc-500" />
+        <FileCode2
+          className={cn(
+            "size-3.5 shrink-0",
+            node.file?.changeType === "ADDED"
+              ? "text-emerald-300"
+              : node.file?.changeType === "DELETED"
+                ? "text-rose-300"
+                : "text-zinc-500"
+          )}
+        />
+        {fileTypeBadge ? (
+          <span
+            className={cn(
+              "inline-flex size-5 shrink-0 items-center justify-center rounded-md border text-[0.65rem] font-semibold",
+              fileTypeBadge.className
+            )}
+          >
+            {fileTypeBadge.label}
+          </span>
+        ) : null}
         <span className="truncate">{node.name}</span>
       </span>
       {node.file ? (
