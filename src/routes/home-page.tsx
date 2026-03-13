@@ -1,104 +1,149 @@
-import { useEffect, useState } from "react";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { type FormEvent, useState } from "react";
+import { LocateFixed } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { getGithubStatus, type GithubStatusResponse } from "@/lib/github";
 
-export function HomePage() {
-  const [status, setStatus] = useState<GithubStatusResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [requestError, setRequestError] = useState<string | null>(null);
+const EXAMPLE_PULL_REQUESTS = [
+  {
+    href: "/facebook/react/pull/9580",
+    label: "facebook/react#9580"
+  },
+  {
+    href: "/kubernetes/kubernetes/pull/46669",
+    label: "kubernetes/kubernetes#46669"
+  },
+  {
+    href: "/square/okhttp/pull/3207",
+    label: "square/okhttp#3207"
+  }
+];
 
-  async function loadGithubStatus(isActive?: () => boolean) {
-    try {
-      setIsLoading(true);
-      setRequestError(null);
+function parsePullRequestInput(value: string) {
+  const trimmedValue = value.trim();
 
-      const response = await getGithubStatus();
+  const shorthandMatch = trimmedValue.match(
+    /^([\w.-]+)\/([\w.-]+)#([1-9]\d*)$/u
+  );
 
-      if (!isActive || isActive()) {
-        setStatus(response);
-      }
-    } catch (error) {
-      if (!isActive || isActive()) {
-        setRequestError(
-          error instanceof Error ? error.message : "Failed to fetch GitHub status"
-        );
-      }
-    } finally {
-      if (!isActive || isActive()) {
-        setIsLoading(false);
-      }
-    }
+  if (shorthandMatch) {
+    const [, owner, repo, number] = shorthandMatch;
+    return { owner, repo, number };
   }
 
-  useEffect(() => {
-    let isActive = true;
-    void loadGithubStatus(() => isActive);
+  const normalizedValue = trimmedValue.startsWith("http")
+    ? trimmedValue
+    : `https://${trimmedValue}`;
 
-    return () => {
-      isActive = false;
-    };
-  }, []);
+  try {
+    const parsedUrl = new URL(normalizedValue);
+
+    if (parsedUrl.hostname !== "github.com") {
+      return null;
+    }
+
+    const pathMatch = parsedUrl.pathname.match(
+      /^\/([\w.-]+)\/([\w.-]+)\/pull\/([1-9]\d*)\/?$/u
+    );
+
+    if (!pathMatch) {
+      return null;
+    }
+
+    const [, owner, repo, number] = pathMatch;
+    return { owner, repo, number };
+  } catch {
+    return null;
+  }
+}
+
+export function HomePage() {
+  const navigate = useNavigate();
+  const [pullRequestInput, setPullRequestInput] = useState("");
+  const [inputError, setInputError] = useState<string | null>(null);
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const parsedPullRequest = parsePullRequestInput(pullRequestInput);
+
+    if (!parsedPullRequest) {
+      setInputError(
+        "Enter a GitHub pull request URL or shorthand like owner/repo#123."
+      );
+      return;
+    }
+
+    setInputError(null);
+    void navigate(
+      `/${parsedPullRequest.owner}/${parsedPullRequest.repo}/pull/${parsedPullRequest.number}`
+    );
+  }
 
   return (
-    <main className="min-h-screen px-5 py-12 md:px-8 md:py-16">
-      <section className="mx-auto w-full max-w-6xl">
-        <div className="mb-8 flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-          <div>
-            <p className="mb-3 text-[0.82rem] uppercase tracking-[0.12em] text-amber-600 dark:text-amber-300">
-              Local pull request review
-            </p>
-            <h1 className="text-5xl leading-none font-semibold tracking-tight md:text-7xl">
-              lgtmate
-            </h1>
-            <p className="mt-5 max-w-2xl text-lg text-muted-foreground md:text-xl">
-              A local web UI for reviewing GitHub pull requests with the GitHub CLI
-              handling authentication.
-            </p>
-          </div>
-          <ThemeToggle />
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <article className="rounded-3xl border border-border/70 bg-card/75 p-5 shadow-sm backdrop-blur-sm">
-            <h2 className="mb-2 text-base font-medium">SPA foundation</h2>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Vite, React, TypeScript, and React Router are wired up.
-            </p>
-          </article>
-          <article className="rounded-3xl border border-border/70 bg-card/75 p-5 shadow-sm backdrop-blur-sm">
-            <h2 className="mb-2 text-base font-medium">API shape</h2>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Vite exposes GitHub-style pull request and changed-file REST
-              endpoints through the GitHub CLI.
-            </p>
-          </article>
-          <article className="rounded-3xl border border-border/70 bg-card/75 p-5 shadow-sm backdrop-blur-sm md:col-span-2 xl:col-span-1">
-            <h2 className="mb-2 text-base font-medium">GitHub status</h2>
-            <div className="mb-4">
-              <Button onClick={() => void loadGithubStatus()} disabled={isLoading}>
-                {isLoading ? "Loading..." : "Refresh status"}
-              </Button>
-            </div>
-            {isLoading ? (
-              <p className="text-sm leading-6 text-muted-foreground">
-                Loading `/api/github/status`...
+    <main className="flex flex-1 items-center px-5 py-12 md:px-8 md:py-16">
+      <section className="w-full">
+        <div className="mx-auto max-w-3xl">
+          <div className="rounded-[2rem] border border-border/70 bg-card/80 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-md md:p-8">
+            <div className="mb-6">
+              <p className="mb-3 text-[0.82rem] uppercase tracking-[0.12em] text-amber-600 dark:text-amber-300">
+                Local pull request review
               </p>
-            ) : null}
-            {requestError ? (
-              <p className="text-sm leading-6 text-destructive">{requestError}</p>
-            ) : null}
-            {status?.ok ? (
-              <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-2xl border border-border/70 bg-background/80 p-4 text-sm leading-6">
-                {status.output}
-              </pre>
-            ) : null}
-          </article>
-          <article className="rounded-3xl border border-border/70 bg-card/75 p-5 shadow-sm backdrop-blur-sm">
-            <h2 className="mb-2 text-base font-medium">Route pattern</h2>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Open `/:owner/:repo/pull/:number` to browse a pull request locally.
-            </p>
-          </article>
+              <h1 className="text-2xl leading-tight font-semibold tracking-tight md:text-3xl">
+                Open a GitHub pull request directly
+              </h1>
+              <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
+                Paste a full GitHub pull request URL or use the compact
+                `owner/repo#number` format to jump straight into the review UI.
+              </p>
+            </div>
+
+            <form className="flex flex-col gap-3 md:flex-row" onSubmit={handleSubmit}>
+              <label className="sr-only" htmlFor="pull-request-input">
+                GitHub pull request URL
+              </label>
+              <div className="relative flex-1">
+                <LocateFixed className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  id="pull-request-input"
+                  type="text"
+                  value={pullRequestInput}
+                  onChange={(event) => setPullRequestInput(event.target.value)}
+                  placeholder="https://github.com/owner/repo/pull/123 or owner/repo#123"
+                  className="h-12 w-full rounded-2xl border border-border/70 bg-background/80 pr-4 pl-11 text-sm outline-none transition focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15"
+                />
+              </div>
+              <Button className="h-12 rounded-2xl px-6 text-sm font-medium" size="lg" type="submit">
+                Go
+              </Button>
+            </form>
+
+            <div className="mt-4 min-h-6 text-sm">
+              {inputError ? (
+                <p className="text-destructive">{inputError}</p>
+              ) : (
+                <p className="text-muted-foreground">
+                  Accepts GitHub PR URLs and shorthand references.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-8 rounded-2xl border border-border/60 bg-background/45 p-5">
+              <p className="text-sm text-muted-foreground">
+                Try an example pull request:
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {EXAMPLE_PULL_REQUESTS.map((pullRequest) => (
+                  <Link
+                    key={pullRequest.href}
+                    to={pullRequest.href}
+                    className="inline-flex rounded-full border border-border/70 bg-background/80 px-3 py-1.5 text-sm transition-colors hover:border-amber-400/70 hover:text-amber-700 dark:hover:text-amber-300"
+                  >
+                    {pullRequest.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </main>

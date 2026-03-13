@@ -1,5 +1,4 @@
 import { ExternalLink, GitBranch } from "lucide-react";
-import { ThemeToggle } from "@/components/theme-toggle";
 import {
   getPullRequestState,
   type GithubPullRequest
@@ -33,7 +32,6 @@ export function PullRequestHeader({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-3">
-          <ThemeToggle />
           <a
             href={pullRequest.url}
             target="_blank"

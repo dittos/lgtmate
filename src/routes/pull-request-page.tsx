@@ -131,7 +131,7 @@ export function PullRequestPage() {
 
   if (Number.isNaN(number) || !owner || !repo) {
     return (
-      <main className="flex h-screen items-center justify-center px-6 text-sm text-destructive">
+      <main className="flex min-h-0 flex-1 items-center justify-center px-6 text-sm text-destructive">
         Invalid pull request URL.
       </main>
     );
@@ -139,7 +139,7 @@ export function PullRequestPage() {
 
   if (isPullRequestLoading && !pullRequest) {
     return (
-      <main className="flex h-screen items-center justify-center text-sm text-muted-foreground">
+      <main className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">
         Loading pull request...
       </main>
     );
@@ -147,14 +147,14 @@ export function PullRequestPage() {
 
   if (pullRequestError || !pullRequest) {
     return (
-      <main className="flex h-screen items-center justify-center px-6 text-sm text-destructive">
+      <main className="flex min-h-0 flex-1 items-center justify-center px-6 text-sm text-destructive">
         {pullRequestError ?? "Failed to load pull request"}
       </main>
     );
   }
 
   return (
-    <main className="flex h-screen flex-col overflow-hidden">
+    <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <section className="flex h-full flex-col border border-border/70 bg-card/75 shadow-sm backdrop-blur-md">
         <PullRequestHeader pullRequest={pullRequest} />
         <div className="flex min-h-0 flex-1">

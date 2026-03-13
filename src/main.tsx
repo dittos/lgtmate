@@ -4,16 +4,23 @@ import { RouterProvider, createBrowserRouter } from "react-router-dom";
 import { ThemeProvider } from "@/lib/theme";
 import { HomePage } from "@/routes/home-page";
 import { PullRequestPage } from "@/routes/pull-request-page";
+import { RootLayout } from "@/routes/root-layout";
 import "./styles.css";
 
 const router = createBrowserRouter([
   {
     path: "/",
-    element: <HomePage />
-  },
-  {
-    path: "/:owner/:repo/pull/:number",
-    element: <PullRequestPage />
+    element: <RootLayout />,
+    children: [
+      {
+        index: true,
+        element: <HomePage />
+      },
+      {
+        path: ":owner/:repo/pull/:number",
+        element: <PullRequestPage />
+      }
+    ]
   }
 ]);
 
