@@ -1,4 +1,5 @@
 import { FileCode2, FileText, FolderTree, Minus, Plus } from "lucide-react";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import type { GithubPullRequestFileNode } from "@/lib/github";
 import { cn } from "@/lib/utils";
 
@@ -196,7 +197,7 @@ function FileTreeNodeView({
           style={{ paddingLeft: `${depth * 14 + 8}px` }}
         >
           <span className="text-muted-foreground">/</span>
-          <span>{compressed.label}</span>
+          <TruncatedText text={compressed.label} className="block min-w-0 flex-1" />
         </div>
         <div className="space-y-1">
           {compressed.node.children.map((child) => (
@@ -246,7 +247,7 @@ function FileTreeNodeView({
             {fileTypeBadge.label}
           </span>
         ) : null}
-        <span className="truncate">{node.name}</span>
+        <TruncatedText text={node.name} className="min-w-0 flex-1" />
       </span>
       {node.file ? (
         <span className="flex shrink-0 items-center gap-2 text-[0.72rem] tabular-nums">

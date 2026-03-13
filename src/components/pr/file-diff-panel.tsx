@@ -1,5 +1,6 @@
 import { Suspense, lazy } from "react";
 import { ExternalLink } from "lucide-react";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { formatChangeType, type GithubPullRequestRestFile } from "@/lib/github";
 import { useTheme } from "@/lib/theme";
 
@@ -48,7 +49,9 @@ export function FileDiffPanel({
   if (!patch) {
     return (
       <section className="mx-auto w-full max-w-3xl px-6 py-6 md:px-8">
-        <h2 className="mb-2 text-lg font-semibold">{file.filename}</h2>
+        <h2 className="mb-2 text-lg font-semibold">
+          <TruncatedText text={file.filename} className="block" />
+        </h2>
         <p className="mb-5 text-sm text-muted-foreground">
           GitHub did not provide a textual patch for this file.
         </p>
@@ -71,7 +74,9 @@ export function FileDiffPanel({
     <div className="h-full px-4 py-4">
       <div className="mb-3 flex items-center justify-between gap-3 px-2">
         <div className="min-w-0">
-          <h2 className="truncate text-base font-semibold">{file.filename}</h2>
+          <h2 className="text-base font-semibold">
+            <TruncatedText text={file.filename} className="block" />
+          </h2>
           <p className="mt-1 text-xs uppercase tracking-[0.12em] text-muted-foreground">
             {formatChangeType(file.status)}
             {file.previous_filename ? ` from ${file.previous_filename}` : ""}
