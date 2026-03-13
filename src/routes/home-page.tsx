@@ -62,8 +62,8 @@ export function HomePage() {
           <article className="rounded-3xl border border-white/12 bg-black/35 p-5 backdrop-blur-sm">
             <h2 className="mb-2 text-base font-medium">API shape</h2>
             <p className="text-sm leading-6 text-zinc-300">
-              Vite exposes pull request metadata, changed files, and file diffs
-              through the GitHub CLI.
+              Vite exposes GitHub-style pull request and changed-file REST
+              endpoints through the GitHub CLI.
             </p>
           </article>
           <article className="rounded-3xl border border-white/12 bg-black/35 p-5 backdrop-blur-sm md:col-span-2 xl:col-span-1">

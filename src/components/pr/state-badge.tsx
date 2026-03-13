@@ -1,10 +1,9 @@
 import { cn } from "@/lib/utils";
-import type { PullRequestSummary } from "@/lib/github";
 
 export function StateBadge({
   state
 }: {
-  state: PullRequestSummary["state"];
+  state: "open" | "closed" | "merged";
 }) {
   return (
     <span

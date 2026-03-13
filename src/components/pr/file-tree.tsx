@@ -1,11 +1,11 @@
 import { FileCode2, FolderTree, Minus, Plus } from "lucide-react";
-import type { PullRequestFile } from "@/lib/github";
+import type { GithubPullRequestFileNode } from "@/lib/github";
 import { cn } from "@/lib/utils";
 
 type FileTreeNode = {
   name: string;
   path: string | null;
-  file: PullRequestFile | null;
+  file: GithubPullRequestFileNode | null;
   children: FileTreeNode[];
 };
 
@@ -14,7 +14,7 @@ type CompressedDirectoryNode = {
   node: FileTreeNode;
 };
 
-function buildFileTree(files: PullRequestFile[]) {
+function buildFileTree(files: GithubPullRequestFileNode[]) {
   const root: FileTreeNode = {
     name: "",
     path: null,
@@ -84,7 +84,7 @@ export function FileTree({
   selectedPath,
   onSelect
 }: {
-  files: PullRequestFile[];
+  files: GithubPullRequestFileNode[];
   selectedPath: string | null;
   onSelect(path: string): void;
 }) {

@@ -1,11 +1,14 @@
 import { ExternalLink, GitBranch } from "lucide-react";
-import type { PullRequestSummary } from "@/lib/github";
+import {
+  getPullRequestState,
+  type GithubPullRequest
+} from "@/lib/github";
 import { StateBadge } from "./state-badge";
 
 export function PullRequestHeader({
   pullRequest
 }: {
-  pullRequest: PullRequestSummary;
+  pullRequest: GithubPullRequest;
 }) {
   return (
     <div className="border-b border-white/10 px-6 py-5 md:px-8">
@@ -16,10 +19,10 @@ export function PullRequestHeader({
           </h1>
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-zinc-300">
             <span className="font-medium text-zinc-100">
-              {pullRequest.owner}/{pullRequest.repo} #{pullRequest.number}
+              {pullRequest.repository.owner.login}/{pullRequest.repository.name}
             </span>
-            <StateBadge state={pullRequest.state} />
-            <span>by {pullRequest.author ?? "ghost"}</span>
+            <StateBadge state={getPullRequestState(pullRequest)} />
+            <span>by {pullRequest.author?.login ?? "ghost"}</span>
             <span className="inline-flex items-center gap-1.5">
               <GitBranch className="size-3.5 text-zinc-500" />
               {pullRequest.headRefName}

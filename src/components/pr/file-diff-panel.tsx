@@ -1,6 +1,6 @@
 import { Suspense, lazy } from "react";
 import { ExternalLink } from "lucide-react";
-import { formatChangeType, type PullRequestFilePatch } from "@/lib/github";
+import { formatChangeType, type GithubPullRequestRestFile } from "@/lib/github";
 
 const PatchDiff = lazy(async () => {
   const module = await import("@pierre/diffs/react");
@@ -9,10 +9,12 @@ const PatchDiff = lazy(async () => {
 
 export function FileDiffPanel({
   file,
+  patch,
   isLoading,
   error
 }: {
-  file: PullRequestFilePatch | null;
+  file: GithubPullRequestRestFile | null;
+  patch: string | null;
   isLoading: boolean;
   error: string | null;
 }) {
@@ -40,16 +42,16 @@ export function FileDiffPanel({
     );
   }
 
-  if (!file.patch) {
+  if (!patch) {
     return (
       <section className="mx-auto w-full max-w-3xl px-6 py-6 md:px-8">
-        <h2 className="mb-2 text-lg font-semibold text-white">{file.path}</h2>
+        <h2 className="mb-2 text-lg font-semibold text-white">{file.filename}</h2>
         <p className="mb-5 text-sm text-zinc-400">
           GitHub did not provide a textual patch for this file.
         </p>
-        {file.blobUrl ? (
+        {file.blob_url ? (
           <a
-            href={file.blobUrl}
+            href={file.blob_url}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-200 transition-colors hover:bg-white/10"
@@ -66,15 +68,17 @@ export function FileDiffPanel({
     <div className="h-full px-4 py-4">
       <div className="mb-3 flex items-center justify-between gap-3 px-2">
         <div className="min-w-0">
-          <h2 className="truncate text-base font-semibold text-white">{file.path}</h2>
+          <h2 className="truncate text-base font-semibold text-white">
+            {file.filename}
+          </h2>
           <p className="mt-1 text-xs uppercase tracking-[0.12em] text-zinc-500">
             {formatChangeType(file.status)}
-            {file.previousFilename ? ` from ${file.previousFilename}` : ""}
+            {file.previous_filename ? ` from ${file.previous_filename}` : ""}
           </p>
         </div>
-        {file.blobUrl ? (
+        {file.blob_url ? (
           <a
-            href={file.blobUrl}
+            href={file.blob_url}
             target="_blank"
             rel="noreferrer"
             className="inline-flex shrink-0 items-center gap-1.5 text-sm text-zinc-300 hover:text-white"
@@ -93,7 +97,7 @@ export function FileDiffPanel({
           }
         >
           <PatchDiff
-            patch={file.patch}
+            patch={patch}
             options={{
               diffStyle: "split",
               overflow: "wrap",

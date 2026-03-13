@@ -5,13 +5,13 @@ import { FileTree } from "@/components/pr/file-tree";
 import { PullRequestDescription } from "@/components/pr/pull-request-description";
 import { PullRequestHeader } from "@/components/pr/pull-request-header";
 import {
+  buildPullRequestFilePatch,
   getPullRequest,
   getPullRequestFileDiff,
   getPullRequestFiles,
-  invalidatePullRequestCache,
-  type PullRequestFile,
-  type PullRequestFilePatch,
-  type PullRequestSummary
+  type GithubPullRequest,
+  type GithubPullRequestFileNode,
+  type GithubPullRequestRestFile
 } from "@/lib/github";
 
 export function PullRequestPage() {
@@ -22,9 +22,11 @@ export function PullRequestPage() {
   const number = Number(params.number ?? "");
   const selectedPath = searchParams.get("path");
 
-  const [pullRequest, setPullRequest] = useState<PullRequestSummary | null>(null);
-  const [files, setFiles] = useState<PullRequestFile[]>([]);
-  const [selectedFile, setSelectedFile] = useState<PullRequestFilePatch | null>(null);
+  const [pullRequest, setPullRequest] = useState<GithubPullRequest | null>(null);
+  const [files, setFiles] = useState<GithubPullRequestFileNode[]>([]);
+  const [selectedFile, setSelectedFile] = useState<GithubPullRequestRestFile | null>(
+    null
+  );
   const [isPullRequestLoading, setIsPullRequestLoading] = useState(true);
   const [isFilesLoading, setIsFilesLoading] = useState(true);
   const [isDiffLoading, setIsDiffLoading] = useState(false);
@@ -41,8 +43,6 @@ export function PullRequestPage() {
         setIsFilesLoading(true);
         setPullRequestError(null);
         setFilesError(null);
-
-        await invalidatePullRequestCache(owner, repo, number);
 
         const [nextPullRequest, nextFiles] = await Promise.all([
           getPullRequest(owner, repo, number),
@@ -169,6 +169,7 @@ export function PullRequestPage() {
             {selectedPath ? (
               <FileDiffPanel
                 file={selectedFile}
+                patch={selectedFile ? buildPullRequestFilePatch(selectedFile) : null}
                 isLoading={isDiffLoading}
                 error={diffError}
               />

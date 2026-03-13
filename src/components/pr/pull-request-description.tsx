@@ -1,10 +1,10 @@
 import { GitPullRequest } from "lucide-react";
-import type { PullRequestSummary } from "@/lib/github";
+import type { GithubPullRequest } from "@/lib/github";
 
 export function PullRequestDescription({
   pullRequest
 }: {
-  pullRequest: PullRequestSummary;
+  pullRequest: GithubPullRequest;
 }) {
   return (
     <section className="mx-auto w-full max-w-4xl px-6 py-6 md:px-8">
