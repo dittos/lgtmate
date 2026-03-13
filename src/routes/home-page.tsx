@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { getGithubStatus, type GithubStatusResponse } from "@/lib/github";
 
@@ -42,31 +43,36 @@ export function HomePage() {
   return (
     <main className="min-h-screen px-5 py-12 md:px-8 md:py-16">
       <section className="mx-auto w-full max-w-6xl">
-        <p className="mb-3 text-[0.82rem] uppercase tracking-[0.12em] text-amber-300">
-          Local pull request review
-        </p>
-        <h1 className="text-5xl leading-none font-semibold tracking-tight md:text-7xl">
-          lgtmate
-        </h1>
-        <p className="mt-5 mb-8 max-w-2xl text-lg text-zinc-300 md:text-xl">
-          A local web UI for reviewing GitHub pull requests with the GitHub CLI
-          handling authentication.
-        </p>
+        <div className="mb-8 flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="mb-3 text-[0.82rem] uppercase tracking-[0.12em] text-amber-600 dark:text-amber-300">
+              Local pull request review
+            </p>
+            <h1 className="text-5xl leading-none font-semibold tracking-tight md:text-7xl">
+              lgtmate
+            </h1>
+            <p className="mt-5 max-w-2xl text-lg text-muted-foreground md:text-xl">
+              A local web UI for reviewing GitHub pull requests with the GitHub CLI
+              handling authentication.
+            </p>
+          </div>
+          <ThemeToggle />
+        </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <article className="rounded-3xl border border-white/12 bg-black/35 p-5 backdrop-blur-sm">
+          <article className="rounded-3xl border border-border/70 bg-card/75 p-5 shadow-sm backdrop-blur-sm">
             <h2 className="mb-2 text-base font-medium">SPA foundation</h2>
-            <p className="text-sm leading-6 text-zinc-300">
+            <p className="text-sm leading-6 text-muted-foreground">
               Vite, React, TypeScript, and React Router are wired up.
             </p>
           </article>
-          <article className="rounded-3xl border border-white/12 bg-black/35 p-5 backdrop-blur-sm">
+          <article className="rounded-3xl border border-border/70 bg-card/75 p-5 shadow-sm backdrop-blur-sm">
             <h2 className="mb-2 text-base font-medium">API shape</h2>
-            <p className="text-sm leading-6 text-zinc-300">
+            <p className="text-sm leading-6 text-muted-foreground">
               Vite exposes GitHub-style pull request and changed-file REST
               endpoints through the GitHub CLI.
             </p>
           </article>
-          <article className="rounded-3xl border border-white/12 bg-black/35 p-5 backdrop-blur-sm md:col-span-2 xl:col-span-1">
+          <article className="rounded-3xl border border-border/70 bg-card/75 p-5 shadow-sm backdrop-blur-sm md:col-span-2 xl:col-span-1">
             <h2 className="mb-2 text-base font-medium">GitHub status</h2>
             <div className="mb-4">
               <Button onClick={() => void loadGithubStatus()} disabled={isLoading}>
@@ -74,22 +80,22 @@ export function HomePage() {
               </Button>
             </div>
             {isLoading ? (
-              <p className="text-sm leading-6 text-zinc-300">
+              <p className="text-sm leading-6 text-muted-foreground">
                 Loading `/api/github/status`...
               </p>
             ) : null}
             {requestError ? (
-              <p className="text-sm leading-6 text-red-300">{requestError}</p>
+              <p className="text-sm leading-6 text-destructive">{requestError}</p>
             ) : null}
             {status?.ok ? (
-              <pre className="overflow-x-auto whitespace-pre-wrap break-words text-sm leading-6 text-zinc-100">
+              <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-2xl border border-border/70 bg-background/80 p-4 text-sm leading-6">
                 {status.output}
               </pre>
             ) : null}
           </article>
-          <article className="rounded-3xl border border-white/12 bg-black/35 p-5 backdrop-blur-sm">
+          <article className="rounded-3xl border border-border/70 bg-card/75 p-5 shadow-sm backdrop-blur-sm">
             <h2 className="mb-2 text-base font-medium">Route pattern</h2>
-            <p className="text-sm leading-6 text-zinc-300">
+            <p className="text-sm leading-6 text-muted-foreground">
               Open `/:owner/:repo/pull/:number` to browse a pull request locally.
             </p>
           </article>

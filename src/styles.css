@@ -137,10 +137,10 @@ body {
   body {
     @apply bg-background text-foreground;
     background:
-      radial-gradient(circle at top, rgb(253 186 116 / 0.16), transparent 30%),
-      linear-gradient(160deg, #1d232c 0%, #0e1116 55%, #182b2b 100%);
+      radial-gradient(circle at top, rgb(251 191 36 / 0.18), transparent 28%),
+      linear-gradient(160deg, #fff9ef 0%, #f4f0e8 50%, #eef6f2 100%);
   }
-html {
+  html {
     @apply h-full font-sans;
   }
   a {
@@ -154,8 +154,16 @@ html {
   }
 }
 
+@layer base {
+  .dark body {
+    background:
+      radial-gradient(circle at top, rgb(253 186 116 / 0.16), transparent 30%),
+      linear-gradient(160deg, #1d232c 0%, #0e1116 55%, #182b2b 100%);
+  }
+}
+
 .markdown-body {
-  color: rgb(228 228 231);
+  color: rgb(39 39 42);
   line-height: 1.7;
 }
 
@@ -172,7 +180,7 @@ html {
 .markdown-body h3,
 .markdown-body h4 {
   margin: 1.5rem 0 0.75rem;
-  color: white;
+  color: rgb(9 9 11);
   font-weight: 600;
   line-height: 1.25;
 }
@@ -195,18 +203,18 @@ html {
 }
 
 .markdown-body code {
-  border: 1px solid rgb(255 255 255 / 0.08);
+  border: 1px solid rgb(24 24 27 / 0.1);
   border-radius: 0.45rem;
-  background: rgb(255 255 255 / 0.06);
+  background: rgb(24 24 27 / 0.04);
   padding: 0.12rem 0.35rem;
   font-size: 0.9em;
 }
 
 .markdown-body pre {
   overflow-x: auto;
-  border: 1px solid rgb(255 255 255 / 0.08);
+  border: 1px solid rgb(24 24 27 / 0.1);
   border-radius: 1rem;
-  background: rgb(11 15 20 / 0.9);
+  background: rgb(250 250 250 / 0.92);
   padding: 1rem;
 }
 
@@ -217,24 +225,58 @@ html {
 }
 
 .markdown-body blockquote {
-  border-left: 3px solid rgb(251 191 36 / 0.4);
+  border-left: 3px solid rgb(217 119 6 / 0.4);
   margin-left: 0;
   padding-left: 1rem;
-  color: rgb(212 212 216);
+  color: rgb(82 82 91);
 }
 
 .markdown-body a {
-  color: rgb(253 224 71);
+  color: rgb(180 83 9);
   text-decoration: underline;
   text-underline-offset: 0.18em;
 }
 
 .markdown-body hr {
   border: 0;
-  border-top: 1px solid rgb(255 255 255 / 0.1);
+  border-top: 1px solid rgb(24 24 27 / 0.1);
   margin: 1.5rem 0;
 }
 
 .diff-frame {
   scrollbar-gutter: stable both-edges;
+}
+
+.dark .markdown-body {
+  color: rgb(228 228 231);
+}
+
+.dark .markdown-body h1,
+.dark .markdown-body h2,
+.dark .markdown-body h3,
+.dark .markdown-body h4 {
+  color: white;
+}
+
+.dark .markdown-body code {
+  border-color: rgb(255 255 255 / 0.08);
+  background: rgb(255 255 255 / 0.06);
+}
+
+.dark .markdown-body pre {
+  border-color: rgb(255 255 255 / 0.08);
+  background: rgb(11 15 20 / 0.9);
+}
+
+.dark .markdown-body blockquote {
+  border-left-color: rgb(251 191 36 / 0.4);
+  color: rgb(212 212 216);
+}
+
+.dark .markdown-body a {
+  color: rgb(253 224 71);
+}
+
+.dark .markdown-body hr {
+  border-top-color: rgb(255 255 255 / 0.1);
 }

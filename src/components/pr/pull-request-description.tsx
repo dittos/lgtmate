@@ -18,7 +18,7 @@ export function PullRequestDescription({
           dangerouslySetInnerHTML={{ __html: pullRequest.bodyHTML }}
         />
       ) : (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-white/3 px-5 py-4 text-sm text-zinc-400">
+        <div className="rounded-2xl border border-dashed border-border/70 bg-muted/30 px-5 py-4 text-sm text-muted-foreground">
           No description provided.
         </div>
       )}

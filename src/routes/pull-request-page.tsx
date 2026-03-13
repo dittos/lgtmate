@@ -131,7 +131,7 @@ export function PullRequestPage() {
 
   if (Number.isNaN(number) || !owner || !repo) {
     return (
-      <main className="flex h-screen items-center justify-center px-6 text-sm text-rose-300">
+      <main className="flex h-screen items-center justify-center px-6 text-sm text-destructive">
         Invalid pull request URL.
       </main>
     );
@@ -139,7 +139,7 @@ export function PullRequestPage() {
 
   if (isPullRequestLoading && !pullRequest) {
     return (
-      <main className="flex h-screen items-center justify-center text-sm text-zinc-400">
+      <main className="flex h-screen items-center justify-center text-sm text-muted-foreground">
         Loading pull request...
       </main>
     );
@@ -147,22 +147,22 @@ export function PullRequestPage() {
 
   if (pullRequestError || !pullRequest) {
     return (
-      <main className="flex h-screen items-center justify-center px-6 text-sm text-rose-300">
+      <main className="flex h-screen items-center justify-center px-6 text-sm text-destructive">
         {pullRequestError ?? "Failed to load pull request"}
       </main>
     );
   }
 
   return (
-    <main className="flex h-screen flex-col overflow-hidden px-4 py-4 md:px-6">
-      <section className="rounded-[2rem] border border-white/10 bg-black/28 backdrop-blur-md">
+    <main className="flex h-screen flex-col overflow-hidden">
+      <section className="flex h-full flex-col border border-border/70 bg-card/75 shadow-sm backdrop-blur-md">
         <PullRequestHeader pullRequest={pullRequest} />
-        <div className="flex h-[calc(100vh-10.5rem)] min-h-0">
-          <aside className="min-h-0 w-full max-w-[22rem] shrink-0 overflow-auto border-r border-white/10 bg-black/18">
+        <div className="flex min-h-0 flex-1">
+          <aside className="min-h-0 w-full max-w-[22rem] shrink-0 overflow-auto border-r border-border/70 bg-muted/25">
             {isFilesLoading ? (
-              <div className="px-5 py-5 text-sm text-zinc-400">Loading files...</div>
+              <div className="px-5 py-5 text-sm text-muted-foreground">Loading files...</div>
             ) : filesError ? (
-              <div className="px-5 py-5 text-sm text-rose-300">{filesError}</div>
+              <div className="px-5 py-5 text-sm text-destructive">{filesError}</div>
             ) : (
               <FileTree
                 files={files}

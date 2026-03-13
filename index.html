@@ -7,6 +7,13 @@
       content="width=device-width, initial-scale=1.0"
     />
     <title>lgtmate</title>
+    <script>
+      (function () {
+        var theme = localStorage.getItem("lgtmate-theme") === "dark" ? "dark" : "light";
+        document.documentElement.classList.toggle("dark", theme === "dark");
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

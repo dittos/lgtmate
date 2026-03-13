@@ -18,16 +18,16 @@ function getFileChangeClasses(changeType: string, isSelected: boolean) {
   switch (changeType) {
     case "ADDED":
       return isSelected
-        ? "bg-emerald-400/14 text-emerald-50 ring-1 ring-emerald-300/25"
-        : "text-emerald-100 hover:bg-emerald-400/10 hover:text-emerald-50";
+        ? "bg-emerald-500/8 text-emerald-800 ring-1 ring-emerald-500/15 dark:text-emerald-100"
+        : "text-emerald-700 hover:bg-emerald-500/6 hover:text-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-500/8 dark:hover:text-emerald-100";
     case "DELETED":
       return isSelected
-        ? "bg-rose-400/14 text-rose-50 ring-1 ring-rose-300/25"
-        : "text-rose-100 hover:bg-rose-400/10 hover:text-rose-50";
+        ? "bg-rose-500/8 text-rose-800 ring-1 ring-rose-500/15 dark:text-rose-100"
+        : "text-rose-700 hover:bg-rose-500/6 hover:text-rose-800 dark:text-rose-300 dark:hover:bg-rose-500/8 dark:hover:text-rose-100";
     default:
       return isSelected
-        ? "bg-amber-300/14 text-white ring-1 ring-amber-200/20"
-        : "text-zinc-300 hover:bg-white/6 hover:text-white";
+        ? "bg-amber-500/12 text-foreground ring-1 ring-amber-500/20"
+        : "text-muted-foreground hover:bg-muted hover:text-foreground";
   }
 }
 
@@ -36,22 +36,23 @@ function getFileTypeBadge(changeType: string) {
     case "ADDED":
       return {
         label: "A",
-        className: "border-emerald-300/20 bg-emerald-400/10 text-emerald-200"
+        className:
+          "border-emerald-500/15 bg-emerald-500/8 text-emerald-700 dark:text-emerald-200"
       };
     case "DELETED":
       return {
         label: "D",
-        className: "border-rose-300/20 bg-rose-400/10 text-rose-200"
+        className: "border-rose-500/15 bg-rose-500/8 text-rose-700 dark:text-rose-200"
       };
     case "RENAMED":
       return {
         label: "R",
-        className: "border-sky-300/20 bg-sky-400/10 text-sky-200"
+        className: "border-sky-500/15 bg-sky-500/8 text-sky-700 dark:text-sky-200"
       };
     default:
       return {
         label: "M",
-        className: "border-white/10 bg-white/5 text-zinc-300"
+        className: "border-border/70 bg-muted/60 text-muted-foreground"
       };
   }
 }
@@ -136,7 +137,7 @@ export function FileTree({
 
   return (
     <div className="px-3 py-3">
-      <div className="mb-3 flex items-center justify-between px-2 text-xs uppercase tracking-[0.14em] text-zinc-400">
+      <div className="mb-3 flex items-center justify-between px-2 text-xs uppercase tracking-[0.14em] text-muted-foreground">
         <span className="inline-flex items-center gap-2">
           <FolderTree className="size-3.5" />
           Files changed
@@ -149,12 +150,12 @@ export function FileTree({
           className={cn(
             "flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left text-sm transition-colors",
             selectedPath === null
-              ? "bg-amber-300/14 text-white ring-1 ring-amber-200/20"
-              : "text-zinc-300 hover:bg-white/6 hover:text-white"
+              ? "bg-amber-500/12 text-foreground ring-1 ring-amber-500/20"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
           )}
           onClick={onSelectDescription}
         >
-          <FileText className="size-3.5 shrink-0 text-zinc-500" />
+          <FileText className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="truncate">Description</span>
         </button>
         {nodes.map((node) => (
@@ -191,10 +192,10 @@ function FileTreeNodeView({
     return (
       <div>
         <div
-          className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-zinc-300"
+          className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-muted-foreground"
           style={{ paddingLeft: `${depth * 14 + 8}px` }}
         >
-          <span className="text-zinc-500">/</span>
+          <span className="text-muted-foreground">/</span>
           <span>{compressed.label}</span>
         </div>
         <div className="space-y-1">
@@ -229,10 +230,10 @@ function FileTreeNodeView({
           className={cn(
             "size-3.5 shrink-0",
             node.file?.changeType === "ADDED"
-              ? "text-emerald-300"
+              ? "text-emerald-700 dark:text-emerald-300"
               : node.file?.changeType === "DELETED"
-                ? "text-rose-300"
-                : "text-zinc-500"
+                ? "text-rose-700 dark:text-rose-300"
+                : "text-muted-foreground"
           )}
         />
         {fileTypeBadge ? (
@@ -249,11 +250,11 @@ function FileTreeNodeView({
       </span>
       {node.file ? (
         <span className="flex shrink-0 items-center gap-2 text-[0.72rem] tabular-nums">
-          <span className="inline-flex items-center gap-1 text-emerald-300">
+          <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
             <Plus className="size-3" />
             {node.file.additions}
           </span>
-          <span className="inline-flex items-center gap-1 text-rose-300">
+          <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-300">
             <Minus className="size-3" />
             {node.file.deletions}
           </span>
