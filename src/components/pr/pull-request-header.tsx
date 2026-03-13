@@ -36,7 +36,7 @@ export function PullRequestHeader({
             href={pullRequest.url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-xl border border-border/70 bg-background/70 px-4 py-2 text-sm text-foreground transition-colors hover:bg-muted"
+            className="inline-flex items-center gap-2 rounded-xl border border-border/70 bg-background/70 px-4 py-2 text-sm text-foreground hover:bg-muted"
           >
             View on GitHub
             <ExternalLink className="size-3.5" />

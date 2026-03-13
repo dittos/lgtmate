@@ -8,7 +8,7 @@ export function RootLayout() {
         <div className="flex w-full items-center justify-between gap-4 px-5 py-4 md:px-8">
           <Link
             to="/"
-            className="inline-flex items-center gap-3 rounded-lg transition-colors hover:text-amber-700 dark:hover:text-amber-300"
+            className="inline-flex items-center gap-3 rounded-lg hover:text-amber-700 dark:hover:text-amber-300"
           >
             <span className="text-lg font-semibold tracking-tight md:text-xl">
               lgtmate

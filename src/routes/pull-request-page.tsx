@@ -335,7 +335,7 @@ export function PullRequestPage() {
             onPointerDown={handleResizeStart}
             onKeyDown={handleResizeKeyDown}
           >
-            <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/80 transition-colors group-hover:bg-foreground/40 group-focus-visible:bg-foreground/40" />
+            <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/80 group-hover:bg-foreground/40 group-focus-visible:bg-foreground/40" />
           </div>
           <section className="min-h-0 min-w-0 flex-1 overflow-auto">
             {selectedPath ? (

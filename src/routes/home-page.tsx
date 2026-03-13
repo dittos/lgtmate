@@ -109,7 +109,7 @@ export function HomePage() {
                   value={pullRequestInput}
                   onChange={(event) => setPullRequestInput(event.target.value)}
                   placeholder="https://github.com/owner/repo/pull/123 or owner/repo#123"
-                  className="h-12 w-full rounded-2xl border border-border/70 bg-background/80 pr-4 pl-11 text-sm outline-none transition focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15"
+                  className="h-12 w-full rounded-2xl border border-border/70 bg-background/80 pr-4 pl-11 text-sm outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15"
                 />
               </div>
               <Button className="h-12 rounded-2xl px-6 text-sm font-medium" size="lg" type="submit">
@@ -136,7 +136,7 @@ export function HomePage() {
                   <Link
                     key={pullRequest.href}
                     to={pullRequest.href}
-                    className="inline-flex rounded-full border border-border/70 bg-background/80 px-3 py-1.5 text-sm transition-colors hover:border-amber-400/70 hover:text-amber-700 dark:hover:text-amber-300"
+                    className="inline-flex rounded-full border border-border/70 bg-background/80 px-3 py-1.5 text-sm hover:border-amber-400/70 hover:text-amber-700 dark:hover:text-amber-300"
                   >
                     {pullRequest.label}
                   </Link>

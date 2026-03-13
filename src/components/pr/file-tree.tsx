@@ -149,7 +149,7 @@ export function FileTree({
         <button
           type="button"
           className={cn(
-            "flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left text-sm transition-colors",
+            "flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left text-sm",
             selectedPath === null
               ? "bg-amber-500/12 text-foreground ring-1 ring-amber-500/20"
               : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -220,7 +220,7 @@ function FileTreeNodeView({
     <button
       type="button"
       className={cn(
-        "flex w-full items-center justify-between gap-3 rounded-xl px-2 py-2 text-left text-sm transition-colors",
+        "flex w-full items-center justify-between gap-3 rounded-xl px-2 py-2 text-left text-sm",
         node.file ? getFileChangeClasses(node.file.changeType, isSelected) : null
       )}
       style={{ paddingLeft: `${depth * 14 + 8}px` }}
