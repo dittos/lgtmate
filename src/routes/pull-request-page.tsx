@@ -6,7 +6,6 @@ import {
   type PointerEvent as ReactPointerEvent
 } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { AnalysisStatusCard } from "@/components/pr/analysis-status-card";
 import { FileDiffPanel } from "@/components/pr/file-diff-panel";
 import { FileTree } from "@/components/pr/file-tree";
 import { PullRequestAnalysis } from "@/components/pr/pull-request-analysis";
@@ -316,20 +315,27 @@ export function PullRequestPage() {
     void setSearchParams(nextParams);
   }
 
-  async function handleAnalyze() {
+  async function handleAnalyze(nextProvider: AnalyzerProvider = analysisProvider) {
     try {
       setIsAnalysisLoading(true);
       setAnalysisError(null);
       setAnalysisProgress("Requesting pull request analysis...");
+      setAnalysisProvider(nextProvider);
 
-      const response = await analyzePullRequest(owner, repo, number, {
-        provider: analysisProvider,
-        forceRefresh: true
-      }, {
-        onProgress: (event) => {
-          setAnalysisProgress(event.message);
+      const response = await analyzePullRequest(
+        owner,
+        repo,
+        number,
+        {
+          provider: nextProvider,
+          forceRefresh: true
+        },
+        {
+          onProgress: (event) => {
+            setAnalysisProgress(event.message);
+          }
         }
-      });
+      );
 
       setAnalysis(response.result);
     } catch (error) {
@@ -423,7 +429,21 @@ export function PullRequestPage() {
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <section className="flex h-full flex-col border border-border/70 bg-card/75 shadow-sm backdrop-blur-md">
-        <PullRequestHeader pullRequest={pullRequest} />
+        <PullRequestHeader
+          pullRequest={pullRequest}
+          provider={analysisProvider}
+          providerAvailability={providerAvailability}
+          repositoryError={analysisRepositoryError}
+          hasMapping={hasAnalysisMapping}
+          analysis={analysis}
+          isOutdated={isAnalysisOutdated}
+          isLoading={isAnalysisLookupLoading || isAnalysisLoading}
+          progressMessage={analysisProgress}
+          error={analysisError}
+          onAnalyze={(nextProvider) => {
+            void handleAnalyze(nextProvider);
+          }}
+        />
         <div ref={splitContainerRef} className="flex min-h-0 flex-1">
           <aside
             className="min-h-0 shrink-0 overflow-auto border-r border-border/70 bg-muted/25"
@@ -472,21 +492,6 @@ export function PullRequestPage() {
               />
             ) : (
               <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-6 py-6 md:px-8">
-                <AnalysisStatusCard
-                  provider={analysisProvider}
-                  onProviderChange={setAnalysisProvider}
-                  providerAvailability={providerAvailability}
-                  repositoryError={analysisRepositoryError}
-                  hasMapping={hasAnalysisMapping}
-                  analysis={analysis}
-                  isOutdated={isAnalysisOutdated}
-                  isLoading={isAnalysisLookupLoading || isAnalysisLoading}
-                  progressMessage={analysisProgress}
-                  error={analysisError}
-                  onAnalyze={() => {
-                    void handleAnalyze();
-                  }}
-                />
                 {analysis ? (
                   <PullRequestAnalysis result={analysis} onSelectFile={handleSelectFile} />
                 ) : null}
