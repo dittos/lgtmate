@@ -10,7 +10,8 @@ export function ThemeToggle() {
     <Button
       type="button"
       variant="outline"
-      className="size-10 border-border/80 bg-background/80 p-0 text-foreground shadow-sm backdrop-blur-sm hover:bg-muted"
+      size="icon-sm"
+      className="border-border/80 bg-background/80 p-0 text-foreground shadow-sm backdrop-blur-sm hover:bg-muted"
       onClick={toggleTheme}
       aria-label={`Switch to ${isLightTheme ? "dark" : "light"} mode`}
     >

@@ -200,7 +200,7 @@ export function PrAnalysisPanel({
   }
 
   return (
-    <div className="flex w-full max-w-md shrink-0 flex-col justify-center space-y-2 md:w-[26rem] md:text-right">
+    <div className="flex w-full max-w-md shrink-0 flex-col justify-center gap-1.5 md:w-[23rem] md:text-right">
       <div className="flex justify-start md:justify-end">
         <div ref={providerMenuRef} className="relative flex items-center">
           {analyzeDisabledReason ? (
@@ -211,10 +211,10 @@ export function PrAnalysisPanel({
                     type="button"
                     onClick={() => onAnalyze(provider)}
                     disabled={!canAnalyze}
-                    size="lg"
+                    size="sm"
                     className="rounded-r-none"
                   >
-                    <Sparkles className="size-4" />
+                    <Sparkles className="size-3.5" />
                     {analysis ? "Re-analyze" : "Analyze"} with {getProviderLabel(provider)}
                   </Button>
                 </TooltipTrigger>
@@ -226,10 +226,10 @@ export function PrAnalysisPanel({
               type="button"
               onClick={() => onAnalyze(provider)}
               disabled={!canAnalyze}
-              size="lg"
+              size="sm"
               className="rounded-r-none"
             >
-              <Sparkles className="size-4" />
+              <Sparkles className="size-3.5" />
               {analysis ? "Re-analyze" : "Analyze"} with {getProviderLabel(provider)}
             </Button>
           )}
@@ -239,13 +239,13 @@ export function PrAnalysisPanel({
             aria-haspopup="menu"
             aria-expanded={isProviderMenuOpen}
             disabled={isLoading}
-            size="lg"
-            className="w-9 rounded-l-none border-l border-primary-foreground/15 px-2"
+            size="sm"
+            className="w-8 rounded-l-none border-l border-primary-foreground/15 px-1.5"
             onClick={() => {
               setIsProviderMenuOpen((open) => !open);
             }}
           >
-            <ChevronDown className="size-4" />
+            <ChevronDown className="size-3.5" />
           </Button>
           {isProviderMenuOpen ? (
             <div
@@ -282,7 +282,7 @@ export function PrAnalysisPanel({
       </div>
       {statusContent ? (
         <div
-          className={`flex flex-wrap items-center justify-start gap-x-3 gap-y-1 text-sm ${statusTone} md:justify-end`}
+          className={`flex flex-wrap items-center justify-start gap-x-2.5 gap-y-1 text-xs ${statusTone} md:justify-end md:text-[0.8rem]`}
         >
           {statusContent}
         </div>
