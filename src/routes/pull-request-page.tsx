@@ -8,7 +8,6 @@ import {
 import { useParams, useSearchParams } from "react-router-dom";
 import { FileDiffPanel } from "@/components/pr/file-diff-panel";
 import { FileTree } from "@/components/pr/file-tree";
-import { PullRequestAnalysis } from "@/components/pr/pull-request-analysis";
 import { PullRequestDescription } from "@/components/pr/pull-request-description";
 import { PullRequestHeader } from "@/components/pr/pull-request-header";
 import {
@@ -446,7 +445,7 @@ export function PullRequestPage() {
         />
         <div ref={splitContainerRef} className="flex min-h-0 flex-1">
           <aside
-            className="min-h-0 shrink-0 overflow-auto border-r border-border/70 bg-muted/25"
+            className="min-h-0 shrink-0 overflow-hidden border-r border-border/70 bg-muted/25"
             style={{ width: `${fileTreeWidth}px` }}
           >
             {isFilesLoading ? (
@@ -459,6 +458,22 @@ export function PullRequestPage() {
                 selectedPath={selectedPath}
                 onSelect={handleSelectFile}
                 onSelectDescription={handleSelectDescription}
+                analysis={analysis}
+                isSmartLoading={isAnalysisLookupLoading || isAnalysisLoading}
+                smartError={analysisError}
+                repositoryError={analysisRepositoryError}
+                hasMapping={hasAnalysisMapping}
+                canAnalyze={
+                  hasAnalysisMapping &&
+                  !analysisRepositoryError &&
+                  providerAvailability[analysisProvider].available &&
+                  !(isAnalysisLookupLoading || isAnalysisLoading)
+                }
+                provider={analysisProvider}
+                isOutdated={isAnalysisOutdated}
+                onAnalyze={(nextProvider) => {
+                  void handleAnalyze(nextProvider);
+                }}
               />
             )}
           </aside>
@@ -492,9 +507,6 @@ export function PullRequestPage() {
               />
             ) : (
               <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-6 py-6 md:px-8">
-                {analysis ? (
-                  <PullRequestAnalysis result={analysis} onSelectFile={handleSelectFile} />
-                ) : null}
                 <PullRequestDescription pullRequest={pullRequest} />
               </div>
             )}

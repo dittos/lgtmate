@@ -84,11 +84,11 @@ export function PrAnalysisPanel({
   }, [isProviderMenuOpen]);
 
   let statusTone = "text-muted-foreground";
-  let statusContent: ReactNode = "Click Analyze to start the review.";
+  let statusContent: ReactNode = "Run analysis to start the review.";
 
   if (isLoading) {
     statusContent = (
-      <span className="inline-flex min-w-0 max-w-[40ch] items-center gap-2 whitespace-nowrap">
+      <span className="inline-flex min-w-0 max-w-[60ch] items-center gap-2 whitespace-nowrap">
         <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
         <span className="truncate">
           {progressMessage ?? "Analyzing pull request in an isolated worktree..."}
@@ -132,11 +132,7 @@ export function PrAnalysisPanel({
             size="lg"
             className="rounded-r-none"
           >
-            {isLoading ? (
-              <LoaderCircle className="size-4 animate-spin" />
-            ) : (
-              <Sparkles className="size-4" />
-            )}
+            <Sparkles className="size-4" />
             {analysis ? "Re-analyze" : "Analyze"} with {getProviderLabel(provider)}
           </Button>
           <Button

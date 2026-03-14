@@ -1,11 +1,15 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { fetchGithubGraphql } from "../github-api";
+import { fetchGithubGraphql, fetchGithubJson } from "../github-api";
 import { sendJson } from "../http";
 import { createAnalyzer, getAnalyzerProviderAvailability } from "../analyzer/create-analyzer";
 import { ensureAnalyzerStorage, readStoredAnalysis, writeStoredAnalysis } from "../analyzer/storage";
 import { resolveRepositoryMapping } from "../analyzer/repo-mappings";
 import { createPullRequestWorktree, removePullRequestWorktree } from "../analyzer/worktree";
-import type { AnalyzerProvider, StoredPullRequestAnalysis } from "../analyzer/types";
+import type {
+  AnalyzerProvider,
+  PullRequestAnalysisInputFile,
+  StoredPullRequestAnalysis
+} from "../analyzer/types";
 
 type AnalyzerRequestBody = {
   provider?: unknown;
@@ -30,6 +34,15 @@ type PullRequestGraphqlResponse = {
       } | null;
     } | null;
   };
+};
+
+type PullRequestRestFile = {
+  filename: string;
+  additions: number;
+  deletions: number;
+  status: string;
+  patch?: string;
+  previous_filename?: string;
 };
 
 type AnalyzerStreamEvent =
@@ -135,6 +148,40 @@ async function fetchPullRequestAnalysisContext(
   };
 }
 
+async function fetchPullRequestFiles(
+  owner: string,
+  repo: string,
+  number: number
+): Promise<PullRequestAnalysisInputFile[]> {
+  const files: PullRequestRestFile[] = [];
+
+  for (let page = 1; ; page += 1) {
+    const searchParams = new URLSearchParams({
+      per_page: "100",
+      page: String(page)
+    });
+    const nextPage = (await fetchGithubJson(
+      `/repos/${owner}/${repo}/pulls/${number}/files`,
+      { searchParams }
+    )) as PullRequestRestFile[];
+
+    files.push(...nextPage);
+
+    if (nextPage.length < 100) {
+      break;
+    }
+  }
+
+  return files.map((file) => ({
+    path: file.filename,
+    additions: file.additions,
+    deletions: file.deletions,
+    changeType: file.status.toUpperCase(),
+    previousPath: file.previous_filename ?? null,
+    patch: file.patch ?? null
+  }));
+}
+
 function buildStoredResult(
   owner: string,
   repo: string,
@@ -229,11 +276,10 @@ export async function handlePullRequestAnalyzerRoute(
 
     const writeEvent = startAnalyzerStream(res);
 
-    const pullRequest = await fetchPullRequestAnalysisContext(
-      params.owner,
-      params.repo,
-      params.number
-    );
+    const [pullRequest, files] = await Promise.all([
+      fetchPullRequestAnalysisContext(params.owner, params.repo, params.number),
+      fetchPullRequestFiles(params.owner, params.repo, params.number)
+    ]);
     writeEvent({ type: "progress", message: "Loaded pull request metadata from GitHub." });
 
     if (!body.forceRefresh) {
@@ -278,6 +324,7 @@ export async function handlePullRequestAnalyzerRoute(
         headOid: pullRequest.headRefOid,
         baseOid: pullRequest.baseRefOid,
         pullRequest,
+        files,
         onProgress: (event) => {
           writeEvent({ type: "progress", message: event.message });
         }

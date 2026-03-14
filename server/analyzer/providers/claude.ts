@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { buildPullRequestAnalysisPrompt } from "../prompt";
+import { buildPullRequestAnalysisPrompt, ensureAnalyzerSchemaFile } from "../prompt";
 import { parseAndNormalizePullRequestAnalysis } from "../normalize";
-import { ensureAnalyzerSchemaFile } from "../storage";
 import { runCommand } from "../process";
 import type {
   AnalyzePullRequestInput,
@@ -52,7 +51,7 @@ export class ClaudePullRequestAnalyzer implements PullRequestAnalyzer {
       completedAt: new Date().toISOString(),
       headOid: input.headOid,
       baseOid: input.baseOid,
-      analysis: parseAndNormalizePullRequestAnalysis(stdout)
+      analysis: parseAndNormalizePullRequestAnalysis(stdout, input.files)
     };
   }
 }

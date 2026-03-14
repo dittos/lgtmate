@@ -1,9 +1,8 @@
 import { mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { buildPullRequestAnalysisPrompt } from "../prompt";
+import { buildPullRequestAnalysisPrompt, ensureAnalyzerSchemaFile } from "../prompt";
 import { parseAndNormalizePullRequestAnalysis } from "../normalize";
-import { ensureAnalyzerSchemaFile } from "../storage";
 import { runCommand } from "../process";
 import type {
   AnalyzePullRequestInput,
@@ -126,7 +125,7 @@ function summarizeTodoList(
   }>
 ) {
   if (items.length === 0) {
-    return "Codex is updating its plan...";
+    return "Updating plan";
   }
 
   const completedCount = items.filter((item) => item.completed).length;
@@ -136,7 +135,7 @@ function summarizeTodoList(
     return `Plan ${completedCount}/${items.length}: ${truncate(nextItem, 90)}`;
   }
 
-  return `Plan ${completedCount}/${items.length}: finishing remaining steps...`;
+  return `Plan ${completedCount}/${items.length}`;
 }
 
 function summarizeFileChanges(
@@ -146,13 +145,13 @@ function summarizeFileChanges(
   }>
 ) {
   if (changes.length === 0) {
-    return "Codex applied file changes.";
+    return "Applied file changes";
   }
 
   const labels = changes.slice(0, 3).map((change) => `${change.kind} ${change.path}`);
   const suffix = changes.length > 3 ? ` (+${changes.length - 3} more)` : "";
 
-  return `Codex applied ${changes.length} file change${changes.length === 1 ? "" : "s"}: ${labels.join(", ")}${suffix}`;
+  return `${changes.length} file change${changes.length === 1 ? "" : "s"}: ${labels.join(", ")}${suffix}`;
 }
 
 function summarizeItemEvent(event: Extract<CodexThreadEvent, { item: CodexThreadItem }>) {
@@ -160,62 +159,34 @@ function summarizeItemEvent(event: Extract<CodexThreadEvent, { item: CodexThread
 
   switch (item.type) {
     case "reasoning":
-      return truncate(item.text || "Codex is reasoning about the pull request...");
+      return truncate(item.text || "Reasoning...", 90);
     case "command_execution": {
-      const command = truncate(item.command, 90);
-
-      if (type === "item.completed") {
-        if (item.status === "failed") {
-          const exitSuffix =
-            typeof item.exit_code === "number" ? ` (exit ${item.exit_code})` : "";
-          return `Command failed${exitSuffix}: ${command}`;
-        }
-
-        return `Command completed: ${command}`;
-      }
-
-      if (item.status === "failed") {
-        const exitSuffix =
-          typeof item.exit_code === "number" ? ` (exit ${item.exit_code})` : "";
-        return `Command failed${exitSuffix}: ${command}`;
-      }
-
-      return `Running command: ${command}`;
+      return truncate(item.command, 90);
     }
     case "file_change":
-      if (item.status === "failed") {
-        return "Codex failed to apply a file change.";
-      }
-
       return summarizeFileChanges(item.changes);
     case "mcp_tool_call": {
       const label = `${item.server}/${item.tool}`;
 
       if (item.status === "failed") {
-        return item.error?.message
-          ? `MCP tool failed: ${label} (${truncate(item.error.message, 80)})`
-          : `MCP tool failed: ${label}`;
+        return label;
       }
 
-      if (type === "item.completed" || item.status === "completed") {
-        return `MCP tool completed: ${label}`;
-      }
-
-      return `Calling MCP tool: ${label}`;
+      return label;
     }
     case "web_search":
-      return `Searching the web: ${truncate(item.query, 90)}`;
+      return truncate(item.query, 90);
     case "todo_list":
       return summarizeTodoList(item.items);
     case "error":
       return item.message;
     case "agent_message":
       if (type !== "item.completed") {
-        return "Codex is drafting the final report...";
+        return "Drafting response";
       }
 
       if (!item.text.trim() || looksLikeJson(item.text)) {
-        return "Codex produced the final structured report.";
+        return "Structured response ready";
       }
 
       return truncate(item.text, 120);
@@ -238,13 +209,13 @@ function emitCodexProgressLine(
 
     switch (event.type) {
       case "thread.started":
-        emitProgress("Codex session started...");
+        emitProgress("Session started");
         return;
       case "turn.started":
-        emitProgress("Codex is analyzing the pull request...");
+        emitProgress("Analyzing pull request");
         return;
       case "turn.completed":
-        emitProgress("Codex finished generating the report.");
+        emitProgress("Analysis complete");
         return;
       case "turn.failed":
         emitProgress(event.error.message);
@@ -296,6 +267,8 @@ export class CodexPullRequestAnalyzer implements PullRequestAnalyzer {
         "--skip-git-repo-check",
         "--sandbox",
         "read-only",
+        "-c",
+        'model_reasoning_effort="low"',
         "--json",
         "-C",
         input.worktreePath,
@@ -341,7 +314,7 @@ export class CodexPullRequestAnalyzer implements PullRequestAnalyzer {
       completedAt: new Date().toISOString(),
       headOid: input.headOid,
       baseOid: input.baseOid,
-      analysis: parseAndNormalizePullRequestAnalysis(rawOutput)
+      analysis: parseAndNormalizePullRequestAnalysis(rawOutput, input.files)
     };
   }
 }

@@ -2,28 +2,18 @@ import { fetchJson } from "./api";
 
 export type AnalyzerProvider = "codex" | "claude";
 
-export type PullRequestAnalysis = {
-  summary: string;
-  changeAreas: Array<{
+export type SmartFileTreeAnalysis = {
+  groups: Array<{
+    id: string;
     title: string;
-    summary: string;
-    files: string[];
+    rationale: string;
+    children: Array<{
+      id: string;
+      title: string;
+      filePaths: string[];
+    }>;
   }>;
-  risks: Array<{
-    severity: "high" | "medium" | "low";
-    title: string;
-    details: string;
-    files: string[];
-  }>;
-  testing: {
-    existingSignals: string[];
-    recommendedChecks: string[];
-  };
-  reviewerQuestions: string[];
-  notableFiles: Array<{
-    path: string;
-    reason: string;
-  }>;
+  ungroupedPaths: string[];
   rawMarkdown: string | null;
 };
 
@@ -38,7 +28,7 @@ export type AnalyzePullRequestResult = {
   completedAt: string;
   headOid: string;
   baseOid: string | null;
-  analysis: PullRequestAnalysis;
+  analysis: SmartFileTreeAnalysis;
 };
 
 export type AnalyzerProviderAvailability = {

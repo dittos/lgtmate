@@ -23,109 +23,10 @@ export function getAnalysesRoot() {
   return path.join(getLgtmateRoot(), "analyses");
 }
 
-export function getAnalyzerSchemaPath() {
-  return path.join(getLgtmateRoot(), "analysis-schema.json");
-}
-
 export async function ensureAnalyzerStorage() {
   await mkdir(getLgtmateRoot(), { recursive: true });
   await mkdir(getWorktreesRoot(), { recursive: true });
   await mkdir(getAnalysesRoot(), { recursive: true });
-}
-
-export async function ensureAnalyzerSchemaFile() {
-  await ensureAnalyzerStorage();
-
-  const schemaPath = getAnalyzerSchemaPath();
-  const schema = {
-    type: "object",
-    additionalProperties: false,
-    required: [
-      "summary",
-      "changeAreas",
-      "risks",
-      "testing",
-      "reviewerQuestions",
-      "notableFiles",
-      "rawMarkdown"
-    ],
-    properties: {
-      summary: { type: "string" },
-      changeAreas: {
-        type: "array",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          required: ["title", "summary", "files"],
-          properties: {
-            title: { type: "string" },
-            summary: { type: "string" },
-            files: {
-              type: "array",
-              items: { type: "string" }
-            }
-          }
-        }
-      },
-      risks: {
-        type: "array",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          required: ["severity", "title", "details", "files"],
-          properties: {
-            severity: {
-              type: "string",
-              enum: ["high", "medium", "low"]
-            },
-            title: { type: "string" },
-            details: { type: "string" },
-            files: {
-              type: "array",
-              items: { type: "string" }
-            }
-          }
-        }
-      },
-      testing: {
-        type: "object",
-        additionalProperties: false,
-        required: ["existingSignals", "recommendedChecks"],
-        properties: {
-          existingSignals: {
-            type: "array",
-            items: { type: "string" }
-          },
-          recommendedChecks: {
-            type: "array",
-            items: { type: "string" }
-          }
-        }
-      },
-      reviewerQuestions: {
-        type: "array",
-        items: { type: "string" }
-      },
-      notableFiles: {
-        type: "array",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          required: ["path", "reason"],
-          properties: {
-            path: { type: "string" },
-            reason: { type: "string" }
-          }
-        }
-      },
-      rawMarkdown: {
-        type: ["string", "null"]
-      }
-    }
-  };
-
-  await writeFile(schemaPath, `${JSON.stringify(schema, null, 2)}\n`, "utf8");
-  return schemaPath;
 }
 
 export async function readRepoMappings() {
@@ -172,7 +73,17 @@ export async function readStoredAnalysis(
 
   try {
     const content = await readFile(filePath, "utf8");
-    return JSON.parse(content) as StoredPullRequestAnalysis;
+    const parsed = JSON.parse(content) as Partial<StoredPullRequestAnalysis> | null;
+
+    if (
+      !parsed?.analysis ||
+      !Array.isArray(parsed.analysis.groups) ||
+      !Array.isArray(parsed.analysis.ungroupedPaths)
+    ) {
+      return null;
+    }
+
+    return parsed as StoredPullRequestAnalysis;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return null;

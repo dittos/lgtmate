@@ -1,5 +1,18 @@
-import { FileCode2, FileText, FolderTree, Minus, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  AlertCircle,
+  ChevronDown,
+  FileCode2,
+  FileText,
+  FolderTree,
+  LoaderCircle,
+  Minus,
+  Plus,
+  Sparkles
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { TruncatedText } from "@/components/ui/truncated-text";
+import type { AnalyzePullRequestResult, AnalyzerProvider } from "@/lib/analyzer";
 import type { GithubPullRequestFileNode } from "@/lib/github";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +27,8 @@ type CompressedDirectoryNode = {
   label: string;
   node: FileTreeNode;
 };
+
+type TreeMode = "smart" | "plain";
 
 function getFileChangeClasses(changeType: string, isSelected: boolean) {
   switch (changeType) {
@@ -56,6 +71,22 @@ function getFileTypeBadge(changeType: string) {
         className: "border-border/70 bg-muted/60 text-muted-foreground"
       };
   }
+}
+
+function splitFilePath(path: string) {
+  const lastSlashIndex = path.lastIndexOf("/");
+
+  if (lastSlashIndex < 0) {
+    return {
+      name: path,
+      parentPath: null
+    };
+  }
+
+  return {
+    name: path.slice(lastSlashIndex + 1),
+    parentPath: path.slice(0, lastSlashIndex)
+  };
 }
 
 function buildFileTree(files: GithubPullRequestFileNode[]) {
@@ -123,51 +154,419 @@ function compressDirectoryNode(node: FileTreeNode): CompressedDirectoryNode {
   };
 }
 
+function FileRow({
+  file,
+  selectedPath,
+  onSelect,
+  indent = 0
+}: {
+  file: GithubPullRequestFileNode;
+  selectedPath: string | null;
+  onSelect: (path: string) => void;
+  indent?: number;
+}) {
+  const isSelected = selectedPath === file.path;
+  const fileTypeBadge = getFileTypeBadge(file.changeType);
+  const { name, parentPath } = splitFilePath(file.path);
+
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex w-full items-center justify-between gap-3 rounded-xl px-2 py-2 text-left text-sm",
+        getFileChangeClasses(file.changeType, isSelected)
+      )}
+      style={{ paddingLeft: `${indent}px` }}
+      onClick={() => onSelect(file.path)}
+    >
+      <span className="flex min-w-0 items-center gap-2">
+        <FileCode2
+          className={cn(
+            "size-3.5 shrink-0",
+            file.changeType === "ADDED"
+              ? "text-emerald-700 dark:text-emerald-300"
+              : file.changeType === "DELETED"
+                ? "text-rose-700 dark:text-rose-300"
+                : "text-muted-foreground"
+          )}
+        />
+        <span
+          className={cn(
+            "inline-flex size-5 shrink-0 items-center justify-center rounded-md border text-[0.65rem] font-semibold",
+            fileTypeBadge.className
+          )}
+        >
+          {fileTypeBadge.label}
+        </span>
+        <span className="min-w-0 flex-1">
+          <TruncatedText text={name} className="block min-w-0 font-medium" />
+          {parentPath ? (
+            <TruncatedText
+              text={parentPath}
+              className="mt-0.5 block min-w-0 text-[0.72rem] text-muted-foreground"
+            />
+          ) : null}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function PlainPathTree({
+  files,
+  selectedPath,
+  onSelect
+}: {
+  files: GithubPullRequestFileNode[];
+  selectedPath: string | null;
+  onSelect: (path: string) => void;
+}) {
+  const nodes = buildFileTree(files);
+
+  return (
+    <div className="space-y-1">
+      {nodes.map((node) => (
+        <FileTreeNodeView
+          key={node.name}
+          node={node}
+          depth={0}
+          selectedPath={selectedPath}
+          onSelect={onSelect}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SmartModeEmptyState({
+  isLoading,
+  canAnalyze,
+  provider,
+  onAnalyze,
+  blockedReason
+}: {
+  isLoading: boolean;
+  canAnalyze: boolean;
+  provider: AnalyzerProvider;
+  onAnalyze: (provider: AnalyzerProvider) => void;
+  blockedReason: string | null;
+}) {
+  return (
+    <div className="rounded-2xl border border-dashed border-border/70 bg-background/70 p-4">
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <LoaderCircle className="size-4 animate-spin" />
+          <span>Building smart file groups...</span>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            No smart grouping is cached yet. Analyze this pull request to organize
+            the changed files by concern.
+          </p>
+          {blockedReason ? (
+            <p className="text-sm text-destructive">{blockedReason}</p>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => onAnalyze(provider)}
+            disabled={!canAnalyze}
+          >
+            <Sparkles className="size-4" />
+            Analyze
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function FileTree({
   files,
   selectedPath,
   onSelect,
-  onSelectDescription
+  onSelectDescription,
+  analysis,
+  isSmartLoading,
+  smartError,
+  repositoryError,
+  hasMapping,
+  canAnalyze,
+  provider,
+  isOutdated,
+  onAnalyze
 }: {
   files: GithubPullRequestFileNode[];
   selectedPath: string | null;
   onSelect(path: string): void;
   onSelectDescription(): void;
+  analysis: AnalyzePullRequestResult | null;
+  isSmartLoading: boolean;
+  smartError: string | null;
+  repositoryError: string | null;
+  hasMapping: boolean;
+  canAnalyze: boolean;
+  provider: AnalyzerProvider;
+  isOutdated: boolean;
+  onAnalyze: (provider: AnalyzerProvider) => void;
 }) {
-  const nodes = buildFileTree(files);
+  const [mode, setMode] = useState<TreeMode>("smart");
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [collapsedChildren, setCollapsedChildren] = useState<Record<string, boolean>>({});
+  const filesByPath = new Map(files.map((file) => [file.path, file]));
+  const smartAnalysis = analysis?.analysis ?? null;
+  const hasSmartGroups = (smartAnalysis?.groups.length ?? 0) > 0;
+  const blockedReason =
+    repositoryError ?? (!hasMapping ? "A local repository mapping is required." : smartError);
+
+  useEffect(() => {
+    setCollapsedGroups({});
+    setCollapsedChildren({});
+  }, [analysis?.completedAt]);
 
   return (
-    <div className="px-3 py-3">
-      <div className="mb-3 flex items-center justify-between px-2 text-xs uppercase tracking-[0.14em] text-muted-foreground">
-        <span className="inline-flex items-center gap-2">
-          <FolderTree className="size-3.5" />
-          Files changed
-        </span>
-        <span>{files.length}</span>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 border-b border-border/70 bg-muted/25 px-3 py-3">
+        <div className="mb-3 flex items-center justify-between px-2 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+          <span className="inline-flex items-center gap-2">
+            <FolderTree className="size-3.5" />
+            Files changed
+          </span>
+          <span>{files.length}</span>
+        </div>
+
+        <div className="px-2">
+          <div className="inline-flex w-full items-center rounded-xl border border-border/70 bg-muted/50 p-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-pressed={mode === "smart"}
+              className={cn(
+                "h-7 flex-1 rounded-lg px-2 text-xs",
+                mode === "smart"
+                  ? "bg-background text-foreground shadow-sm hover:bg-background"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+              onClick={() => setMode("smart")}
+            >
+              Smart File Tree
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-pressed={mode === "plain"}
+              className={cn(
+                "h-7 flex-1 rounded-lg px-2 text-xs",
+                mode === "plain"
+                  ? "bg-background text-foreground shadow-sm hover:bg-background"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+              onClick={() => setMode("plain")}
+            >
+              File Tree
+            </Button>
+          </div>
+        </div>
       </div>
-      <div className="space-y-1">
-        <button
-          type="button"
-          className={cn(
-            "flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left text-sm",
-            selectedPath === null
-              ? "bg-amber-500/12 text-foreground ring-1 ring-amber-500/20"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+
+      <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
+        <div className="space-y-2">
+          <button
+            type="button"
+            className={cn(
+              "flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left text-sm",
+              selectedPath === null
+                ? "bg-amber-500/12 text-foreground ring-1 ring-amber-500/20"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+            onClick={onSelectDescription}
+          >
+            <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="truncate">Description</span>
+          </button>
+
+          {mode === "plain" ? (
+            <PlainPathTree
+              files={files}
+              selectedPath={selectedPath}
+              onSelect={onSelect}
+            />
+          ) : !smartAnalysis ? (
+            <SmartModeEmptyState
+              isLoading={isSmartLoading}
+              canAnalyze={canAnalyze}
+              provider={provider}
+              onAnalyze={onAnalyze}
+              blockedReason={blockedReason}
+            />
+          ) : !hasSmartGroups ? (
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
+                Smart grouping was unavailable for this analysis, so the tree is
+                falling back to the regular path view.
+              </div>
+              <PlainPathTree
+                files={files}
+                selectedPath={selectedPath}
+                onSelect={onSelect}
+              />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {smartError ? (
+                <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+                  {smartError}
+                </div>
+              ) : null}
+              {isOutdated ? (
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
+                  Cached smart grouping is outdated for the current PR head commit.
+                </div>
+              ) : null}
+              {isSmartLoading ? (
+                <div className="flex items-center gap-2 rounded-2xl border border-border/70 bg-background/70 p-4 text-sm text-muted-foreground">
+                  <LoaderCircle className="size-4 animate-spin" />
+                  <span>Updating smart file groups...</span>
+                </div>
+              ) : null}
+
+              {smartAnalysis.groups.map((group) => {
+                const isCollapsed = collapsedGroups[group.id] ?? false;
+
+                return (
+                  <section
+                    key={group.id}
+                    className="overflow-hidden rounded-2xl border border-foreground/20 bg-background/80"
+                  >
+                    <button
+                      type="button"
+                      className="flex w-full items-start justify-between gap-3 bg-muted/45 px-4 py-3 text-left"
+                      onClick={() =>
+                        setCollapsedGroups((current) => ({
+                          ...current,
+                          [group.id]: !isCollapsed
+                        }))
+                      }
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <ChevronDown
+                            className={cn(
+                              "size-4 shrink-0 text-muted-foreground transition-transform",
+                              isCollapsed ? "-rotate-90" : "rotate-0"
+                            )}
+                          />
+                          <span className="text-sm font-semibold">{group.title}</span>
+                        </div>
+                        {group.rationale ? (
+                          <p className="mt-1 pl-6 text-sm text-muted-foreground">
+                            {group.rationale}
+                          </p>
+                        ) : null}
+                      </div>
+                    </button>
+
+                    {isCollapsed ? null : (
+                      <div className="space-y-3 border-t border-border/70 px-3 py-3">
+                        {group.children.map((child) => {
+                          const isChildCollapsed = collapsedChildren[child.id] ?? false;
+
+                          return (
+                            <div
+                              key={child.id}
+                              className="rounded-lg bg-muted/15"
+                            >
+                              <button
+                                type="button"
+                                className="flex w-full items-start justify-between gap-3 px-2 py-1.5 text-left"
+                                onClick={() =>
+                                  setCollapsedChildren((current) => ({
+                                    ...current,
+                                    [child.id]: !isChildCollapsed
+                                  }))
+                                }
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <ChevronDown
+                                      className={cn(
+                                        "size-4 shrink-0 text-muted-foreground transition-transform",
+                                        isChildCollapsed ? "-rotate-90" : "rotate-0"
+                                      )}
+                                    />
+                                    <span className="text-sm font-medium">{child.title}</span>
+                                  </div>
+                                </div>
+                              </button>
+
+                              {isChildCollapsed ? null : (
+                                <div className="space-y-1 px-2 py-1">
+                                  {child.filePaths.map((path) => {
+                                    const file = filesByPath.get(path);
+
+                                    if (!file) {
+                                      return null;
+                                    }
+
+                                    return (
+                                      <FileRow
+                                        key={path}
+                                        file={file}
+                                        selectedPath={selectedPath}
+                                        onSelect={onSelect}
+                                        indent={8}
+                                      />
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
+
+              {smartAnalysis.ungroupedPaths.length > 0 ? (
+                <section className="rounded-2xl border border-border/70 bg-background/75">
+                  <div className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="size-4 text-muted-foreground" />
+                      <span className="text-sm font-semibold">Other files</span>
+                      <span className="rounded-full border border-border/70 bg-muted/60 px-2 py-0.5 text-[0.65rem] font-semibold text-muted-foreground">
+                        {smartAnalysis.ungroupedPaths.length}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="space-y-1 border-t border-border/70 px-2 py-2">
+                    {smartAnalysis.ungroupedPaths.map((path) => {
+                      const file = filesByPath.get(path);
+
+                      if (!file) {
+                        return null;
+                      }
+
+                      return (
+                        <FileRow
+                          key={path}
+                          file={file}
+                          selectedPath={selectedPath}
+                          onSelect={onSelect}
+                          indent={8}
+                        />
+                      );
+                    })}
+                  </div>
+                </section>
+              ) : null}
+            </div>
           )}
-          onClick={onSelectDescription}
-        >
-          <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="truncate">Description</span>
-        </button>
-        {nodes.map((node) => (
-          <FileTreeNodeView
-            key={node.name}
-            node={node}
-            depth={0}
-            selectedPath={selectedPath}
-            onSelect={onSelect}
-          />
-        ))}
+        </div>
       </div>
     </div>
   );
@@ -214,14 +613,16 @@ function FileTreeNodeView({
     );
   }
 
-  const fileTypeBadge = node.file ? getFileTypeBadge(node.file.changeType) : null;
+  if (!node.file) {
+    return null;
+  }
 
   return (
     <button
       type="button"
       className={cn(
         "flex w-full items-center justify-between gap-3 rounded-xl px-2 py-2 text-left text-sm",
-        node.file ? getFileChangeClasses(node.file.changeType, isSelected) : null
+        getFileChangeClasses(node.file.changeType, isSelected)
       )}
       style={{ paddingLeft: `${depth * 14 + 8}px` }}
       onClick={() => node.path && onSelect(node.path)}
@@ -230,37 +631,33 @@ function FileTreeNodeView({
         <FileCode2
           className={cn(
             "size-3.5 shrink-0",
-            node.file?.changeType === "ADDED"
+            node.file.changeType === "ADDED"
               ? "text-emerald-700 dark:text-emerald-300"
-              : node.file?.changeType === "DELETED"
+              : node.file.changeType === "DELETED"
                 ? "text-rose-700 dark:text-rose-300"
                 : "text-muted-foreground"
           )}
         />
-        {fileTypeBadge ? (
-          <span
-            className={cn(
-              "inline-flex size-5 shrink-0 items-center justify-center rounded-md border text-[0.65rem] font-semibold",
-              fileTypeBadge.className
-            )}
-          >
-            {fileTypeBadge.label}
-          </span>
-        ) : null}
+        <span
+          className={cn(
+            "inline-flex size-5 shrink-0 items-center justify-center rounded-md border text-[0.65rem] font-semibold",
+            getFileTypeBadge(node.file.changeType).className
+          )}
+        >
+          {getFileTypeBadge(node.file.changeType).label}
+        </span>
         <TruncatedText text={node.name} className="min-w-0 flex-1" />
       </span>
-      {node.file ? (
-        <span className="flex shrink-0 items-center gap-2 text-[0.72rem] tabular-nums">
-          <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
-            <Plus className="size-3" />
-            {node.file.additions}
-          </span>
-          <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-300">
-            <Minus className="size-3" />
-            {node.file.deletions}
-          </span>
+      <span className="flex shrink-0 items-center gap-2 text-[0.72rem] tabular-nums">
+        <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
+          <Plus className="size-3" />
+          {node.file.additions}
         </span>
-      ) : null}
+        <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-300">
+          <Minus className="size-3" />
+          {node.file.deletions}
+        </span>
+      </span>
     </button>
   );
 }
