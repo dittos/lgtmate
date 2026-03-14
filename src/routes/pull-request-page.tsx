@@ -6,10 +6,19 @@ import {
   type PointerEvent as ReactPointerEvent
 } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
+import { AnalysisStatusCard } from "@/components/pr/analysis-status-card";
 import { FileDiffPanel } from "@/components/pr/file-diff-panel";
 import { FileTree } from "@/components/pr/file-tree";
+import { PullRequestAnalysis } from "@/components/pr/pull-request-analysis";
 import { PullRequestDescription } from "@/components/pr/pull-request-description";
 import { PullRequestHeader } from "@/components/pr/pull-request-header";
+import {
+  analyzePullRequest,
+  getPullRequestAnalysis,
+  type AnalyzePullRequestResult,
+  type AnalyzerProvider,
+  type AnalyzerProviderAvailability
+} from "@/lib/analyzer";
 import {
   buildPullRequestFilePatch,
   getPullRequest,
@@ -21,6 +30,7 @@ import {
 } from "@/lib/github";
 
 const FILE_TREE_WIDTH_STORAGE_KEY = "lgtmate-file-tree-width";
+const ANALYSIS_PROVIDER_STORAGE_KEY = "lgtmate-analysis-provider";
 const DEFAULT_FILE_TREE_WIDTH = 352;
 const MIN_FILE_TREE_WIDTH = 240;
 const MIN_CONTENT_WIDTH = 480;
@@ -47,6 +57,26 @@ function getStoredFileTreeWidth() {
     : DEFAULT_FILE_TREE_WIDTH;
 }
 
+function getStoredAnalysisProvider(): AnalyzerProvider {
+  if (typeof window === "undefined") {
+    return "codex";
+  }
+
+  return window.localStorage.getItem(ANALYSIS_PROVIDER_STORAGE_KEY) === "claude"
+    ? "claude"
+    : "codex";
+}
+
+function getDefaultProviderAvailability(): Record<
+  AnalyzerProvider,
+  AnalyzerProviderAvailability
+> {
+  return {
+    codex: { available: false, reason: null },
+    claude: { available: false, reason: null }
+  };
+}
+
 export function PullRequestPage() {
   const params = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -60,15 +90,33 @@ export function PullRequestPage() {
   const [selectedFile, setSelectedFile] = useState<GithubPullRequestRestFile | null>(
     null
   );
+  const [analysisProvider, setAnalysisProvider] = useState<AnalyzerProvider>(() =>
+    getStoredAnalysisProvider()
+  );
+  const [analysis, setAnalysis] = useState<AnalyzePullRequestResult | null>(null);
+  const [providerAvailability, setProviderAvailability] = useState(() =>
+    getDefaultProviderAvailability()
+  );
+  const [analysisRepositoryError, setAnalysisRepositoryError] = useState<string | null>(
+    null
+  );
+  const [hasAnalysisMapping, setHasAnalysisMapping] = useState(false);
   const [isPullRequestLoading, setIsPullRequestLoading] = useState(true);
   const [isFilesLoading, setIsFilesLoading] = useState(true);
   const [isDiffLoading, setIsDiffLoading] = useState(false);
+  const [isAnalysisLookupLoading, setIsAnalysisLookupLoading] = useState(true);
+  const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
   const [pullRequestError, setPullRequestError] = useState<string | null>(null);
   const [filesError, setFilesError] = useState<string | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [fileTreeWidth, setFileTreeWidth] = useState(() => getStoredFileTreeWidth());
   const [isResizing, setIsResizing] = useState(false);
   const splitContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const isAnalysisOutdated = Boolean(
+    pullRequest && analysis && analysis.headOid !== pullRequest.headRefOid
+  );
 
   useEffect(() => {
     let isActive = true;
@@ -154,11 +202,59 @@ export function PullRequestPage() {
   }, [owner, repo, number, selectedPath]);
 
   useEffect(() => {
+    let isActive = true;
+
+    async function loadAnalysis() {
+      try {
+        setIsAnalysisLookupLoading(true);
+        setAnalysisError(null);
+
+        const response = await getPullRequestAnalysis(
+          owner,
+          repo,
+          number,
+          analysisProvider
+        );
+
+        if (!isActive) {
+          return;
+        }
+
+        setAnalysis(response.analysis);
+        setProviderAvailability(response.providers);
+        setHasAnalysisMapping(response.repository.hasMapping);
+        setAnalysisRepositoryError(response.repository.error);
+      } catch (error) {
+        if (isActive) {
+          setAnalysis(null);
+          setAnalysisError(
+            error instanceof Error ? error.message : "Failed to load analysis"
+          );
+        }
+      } finally {
+        if (isActive) {
+          setIsAnalysisLookupLoading(false);
+        }
+      }
+    }
+
+    void loadAnalysis();
+
+    return () => {
+      isActive = false;
+    };
+  }, [analysisProvider, owner, repo, number]);
+
+  useEffect(() => {
     window.localStorage.setItem(
       FILE_TREE_WIDTH_STORAGE_KEY,
       String(fileTreeWidth)
     );
   }, [fileTreeWidth]);
+
+  useEffect(() => {
+    window.localStorage.setItem(ANALYSIS_PROVIDER_STORAGE_KEY, analysisProvider);
+  }, [analysisProvider]);
 
   useEffect(() => {
     const container = splitContainerRef.current;
@@ -215,6 +311,26 @@ export function PullRequestPage() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("path");
     void setSearchParams(nextParams);
+  }
+
+  async function handleAnalyze() {
+    try {
+      setIsAnalysisLoading(true);
+      setAnalysisError(null);
+
+      const response = await analyzePullRequest(owner, repo, number, {
+        provider: analysisProvider,
+        forceRefresh: true
+      });
+
+      setAnalysis(response.result);
+    } catch (error) {
+      setAnalysisError(
+        error instanceof Error ? error.message : "Failed to analyze pull request"
+      );
+    } finally {
+      setIsAnalysisLoading(false);
+    }
   }
 
   function handleResizeStart(event: ReactPointerEvent<HTMLDivElement>) {
@@ -346,7 +462,26 @@ export function PullRequestPage() {
                 error={diffError}
               />
             ) : (
-              <PullRequestDescription pullRequest={pullRequest} />
+              <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-6 py-6 md:px-8">
+                <AnalysisStatusCard
+                  provider={analysisProvider}
+                  onProviderChange={setAnalysisProvider}
+                  providerAvailability={providerAvailability}
+                  repositoryError={analysisRepositoryError}
+                  hasMapping={hasAnalysisMapping}
+                  analysis={analysis}
+                  isOutdated={isAnalysisOutdated}
+                  isLoading={isAnalysisLookupLoading || isAnalysisLoading}
+                  error={analysisError}
+                  onAnalyze={() => {
+                    void handleAnalyze();
+                  }}
+                />
+                {analysis ? (
+                  <PullRequestAnalysis result={analysis} onSelectFile={handleSelectFile} />
+                ) : null}
+                <PullRequestDescription pullRequest={pullRequest} />
+              </div>
             )}
           </section>
         </div>

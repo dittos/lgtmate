@@ -1,7 +1,4 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
+import { spawn } from "node:child_process";
 
 type GithubRequestOptions = {
   headers?: Record<string, string | null | undefined>;
@@ -29,8 +26,45 @@ function buildGithubPath(pathname: string, searchParams?: URLSearchParams) {
   return `${normalizedPath}?${query}`;
 }
 
+function runGithubCommand(args: string[]) {
+  return new Promise<{ stdout: string }>((resolve, reject) => {
+    const child = spawn("gh", args, {
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr.on("data", (chunk) => {
+      const text = chunk.toString();
+      stderr += text;
+      process.stderr.write(text);
+    });
+
+    child.on("error", reject);
+
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve({ stdout });
+        return;
+      }
+
+      reject(
+        new Error(
+          stderr.trim() || stdout.trim() || `gh exited with code ${String(code)}`
+        )
+      );
+    });
+  });
+}
+
 export async function getGithubStatus() {
-  const { stdout } = await execFileAsync("gh", ["auth", "status"]);
+  const { stdout } = await runGithubCommand(["auth", "status"]);
   return stdout.trim();
 }
 
@@ -48,7 +82,7 @@ export async function fetchGithubJson(
 
   args.push(buildGithubPath(pathname, searchParams));
 
-  const { stdout } = await execFileAsync("gh", args);
+  const { stdout } = await runGithubCommand(args);
   return JSON.parse(stdout);
 }
 
@@ -71,6 +105,6 @@ export async function fetchGithubGraphql({
     args.push("-F", `${name}=${String(value)}`);
   }
 
-  const { stdout } = await execFileAsync("gh", args);
+  const { stdout } = await runGithubCommand(args);
   return JSON.parse(stdout);
 }

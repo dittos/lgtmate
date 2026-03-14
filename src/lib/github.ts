@@ -55,6 +55,7 @@ export type GithubStatusResponse =
 
 export type GithubPullRequest = {
   title: string;
+  body: string;
   bodyHTML: string;
   url: string;
   state: "OPEN" | "CLOSED" | "MERGED";
@@ -63,7 +64,9 @@ export type GithubPullRequest = {
     login: string;
   } | null;
   headRefName: string;
+  headRefOid: string;
   baseRefName: string;
+  baseRefOid: string | null;
   repository: {
     owner: {
       login: string;
@@ -205,6 +208,7 @@ export async function getPullRequest(
       repository(owner: $owner, name: $repo) {
         pullRequest(number: $number) {
           title
+          body
           bodyHTML
           url
           state
@@ -213,7 +217,9 @@ export async function getPullRequest(
             login
           }
           headRefName
+          headRefOid
           baseRefName
+          baseRefOid
           repository {
             owner {
               login

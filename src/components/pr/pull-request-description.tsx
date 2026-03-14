@@ -7,7 +7,7 @@ export function PullRequestDescription({
   pullRequest: GithubPullRequest;
 }) {
   return (
-    <section className="mx-auto w-full max-w-4xl px-6 py-6 md:px-8">
+    <section className="rounded-[28px] border border-border/70 bg-card/85 px-6 py-6 shadow-sm backdrop-blur-sm">
       <div className="mb-6 flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-zinc-400">
         <GitPullRequest className="size-3.5" />
         Description
