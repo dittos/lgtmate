@@ -142,29 +142,6 @@ class AnalysisController {
       }));
       this.ensureJobSubscription(response.job);
     } catch (error) {
-      if (ANALYSIS_SOURCE_MODE === "auto") {
-        const analysis = await loadBundledAnalysis(this.owner, this.repo, this.number);
-
-        if (requestId !== this.loadRequestId) {
-          return;
-        }
-
-        if (analysis) {
-          this.setState((current) => ({
-            ...current,
-            analysis,
-            repository: BUNDLED_ANALYSIS_REPOSITORY_STATE,
-            providers: getBundledAnalysisAvailability(),
-            job: null,
-            isLookupLoading: false,
-            isStreamConnected: false,
-            error: null
-          }));
-          this.ensureJobSubscription(null);
-          return;
-        }
-      }
-
       if (requestId !== this.loadRequestId) {
         return;
       }

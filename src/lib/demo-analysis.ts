@@ -16,7 +16,7 @@ type BundledAnalysisModule = {
   default: BundledAnalysisResult;
 };
 
-type AnalysisSourceMode = "api" | "auto" | "bundled";
+type AnalysisSourceMode = "api" | "bundled";
 
 const bundledAnalysisModules = import.meta.glob<BundledAnalysisModule>(
   "../demo/analyses/**/*.json"
@@ -31,11 +31,7 @@ export function isDemoProviderReason(reason: string | null | undefined) {
 export function getAnalysisSourceMode(): AnalysisSourceMode {
   const configuredMode = import.meta.env.VITE_ANALYSIS_SOURCE;
 
-  if (
-    configuredMode === "api" ||
-    configuredMode === "auto" ||
-    configuredMode === "bundled"
-  ) {
+  if (configuredMode === "api" || configuredMode === "bundled") {
     return configuredMode;
   }
 
