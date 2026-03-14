@@ -11,8 +11,8 @@ export function getLgtmateRoot() {
   return path.join(os.homedir(), ".lgtmate");
 }
 
-export function getRepoMappingsPath() {
-  return path.join(getLgtmateRoot(), "repo-mappings.json");
+export function getSettingsPath() {
+  return path.join(getLgtmateRoot(), "settings.json");
 }
 
 export function getWorktreesRoot() {
@@ -29,23 +29,53 @@ export async function ensureAnalyzerStorage() {
   await mkdir(getAnalysesRoot(), { recursive: true });
 }
 
-export async function readRepoMappings() {
-  try {
-    const content = await readFile(getRepoMappingsPath(), "utf8");
-    const parsed = JSON.parse(content) as Record<string, unknown>;
+type LgtmateSettings = {
+  repoMappings?: Record<string, string>;
+  launcher?: {
+    defaultProvider?: string;
+  };
+};
 
-    return Object.fromEntries(
-      Object.entries(parsed).filter(
-        (entry): entry is [string, string] => typeof entry[1] === "string"
-      )
-    );
+async function readJsonFile<T>(filePath: string, fallback: T): Promise<T> {
+  try {
+    return JSON.parse(await readFile(filePath, "utf8")) as T;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return {};
+      return fallback;
     }
 
-    throw new Error("Failed to read repo mappings file");
+    throw error;
   }
+}
+
+function normalizeRepoMappings(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string"
+    )
+  );
+}
+
+export async function readSettings(): Promise<LgtmateSettings> {
+  try {
+    const settings = await readJsonFile<LgtmateSettings>(getSettingsPath(), {});
+    return {
+      ...settings,
+      repoMappings: normalizeRepoMappings(settings.repoMappings),
+      launcher: settings.launcher ?? {}
+    };
+  } catch {
+    throw new Error("Failed to read settings file");
+  }
+}
+
+export async function readRepoMappings() {
+  const settings = await readSettings();
+  return normalizeRepoMappings(settings.repoMappings);
 }
 
 export function getStoredAnalysisPath(

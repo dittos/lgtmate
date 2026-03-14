@@ -29,18 +29,16 @@ export async function handlePullRequestLookup(
   res: Parameters<typeof sendJson>[0],
   input: PullRequestRouteInput
 ) {
-  const [mapping, providers, analysis, pullRequest] = await Promise.all([
+  const [mapping, providers, analysis] = await Promise.all([
     resolveRepositoryMapping(input.owner, input.repo),
     getAnalyzerProviderAvailability(),
-    readStoredAnalysis(input.owner, input.repo, input.number),
-    fetchPullRequestAnalysisContext(input.owner, input.repo, input.number).catch(() => null)
+    readStoredAnalysis(input.owner, input.repo, input.number)
   ]);
 
   const job = analysisJobStore.findRelevantJob({
     owner: input.owner,
     repo: input.repo,
-    number: input.number,
-    headOid: pullRequest?.headRefOid ?? analysis?.headOid ?? null
+    number: input.number
   });
 
   sendJson(res, {

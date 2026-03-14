@@ -16,6 +16,31 @@ npm install
 npm run dev
 ```
 
+## Launcher
+
+Install the package link locally, then run the launcher from inside a GitHub clone:
+
+```bash
+npm link
+lgtm 123
+```
+
+The launcher will:
+
+- infer `owner/repo` from the `origin` remote
+- register the current clone in `~/.lgtmate/settings.json`
+- start the local Vite server if needed and cache its `pid` and `port` in `~/.lgtmate/server-instance.json`
+- remember the default analyzer provider in `~/.lgtmate/settings.json`
+- trigger PR analysis and open `/:owner/:repo/pull/:number`
+
+Optional flags:
+
+```bash
+lgtm 123 --provider claude
+lgtm 123 --port 5180
+lgtm 123 --no-open
+```
+
 The Vite dev server exposes:
 
 - `GET /api/health`

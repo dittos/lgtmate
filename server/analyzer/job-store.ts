@@ -99,8 +99,6 @@ class AnalysisJobStore {
     owner: string;
     repo: string;
     number: number;
-    provider?: AnalyzerProvider;
-    headOid: string | null;
   }) {
     const active = this.findActiveJob(input);
 
