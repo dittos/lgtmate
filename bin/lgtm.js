@@ -17,7 +17,10 @@ const HEALTH_POLL_INTERVAL_MS = 250;
 const VALID_PROVIDERS = new Set(["codex", "claude"]);
 
 function printUsage() {
-  console.error("Usage: lgtm <pr-number> [--provider codex|claude] [--port <number>] [--no-open]");
+  console.error(
+    "Usage: lgtm [owner/]repo <pr-number> [--provider codex|claude] [--port <number>] [--no-open]"
+  );
+  console.error("       lgtm <pr-number> [--provider codex|claude] [--port <number>] [--no-open]");
 }
 
 function fail(message) {
@@ -26,7 +29,7 @@ function fail(message) {
 }
 
 function parseArgs(argv) {
-  let prNumber = null;
+  const positionals = [];
   let provider = null;
   let port = null;
   let openBrowser = true;
@@ -94,19 +97,31 @@ function parseArgs(argv) {
       fail(`Unknown option: ${arg}`);
     }
 
-    if (prNumber !== null) {
-      fail("Only one pull request number can be provided.");
-    }
-
-    prNumber = parsePullRequestNumber(arg);
+    positionals.push(arg);
   }
 
-  if (prNumber === null) {
+  if (positionals.length === 0 || positionals.length > 2) {
     printUsage();
     process.exit(1);
   }
 
-  return { prNumber, provider, port, openBrowser };
+  if (positionals.length === 1) {
+    return {
+      repositoryRef: null,
+      prNumber: parsePullRequestNumber(positionals[0]),
+      provider,
+      port,
+      openBrowser
+    };
+  }
+
+  return {
+    repositoryRef: parseRepositoryReference(positionals[0]),
+    prNumber: parsePullRequestNumber(positionals[1]),
+    provider,
+    port,
+    openBrowser
+  };
 }
 
 function parsePullRequestNumber(value) {
@@ -118,6 +133,29 @@ function parsePullRequestNumber(value) {
   }
 
   return number;
+}
+
+function parseRepositoryReference(value) {
+  const normalized = value.trim().replace(/^github\.com\//i, "").replace(/^\/+|\/+$/g, "");
+
+  if (!normalized) {
+    fail(`Invalid repository reference: ${value}`);
+  }
+
+  const segments = normalized.split("/");
+
+  if (
+    segments.length > 2 ||
+    segments.some((segment) => !segment || segment === "." || segment === "..")
+  ) {
+    fail(`Invalid repository reference: ${value}`);
+  }
+
+  if (segments.length === 1) {
+    return { owner: null, repo: segments[0] };
+  }
+
+  return { owner: segments[0], repo: segments[1] };
 }
 
 function getAppRoot() {
@@ -268,6 +306,52 @@ async function registerRepositoryMapping(owner, repo, repositoryPath) {
       [repositoryKey]: repositoryPath
     }
   });
+}
+
+function normalizeRepositoryKey(value) {
+  return value.trim().toLowerCase();
+}
+
+async function resolveMappedRepository(repositoryRef) {
+  const settings = await readSettings();
+  const entries = Object.entries(settings.repoMappings);
+
+  if (entries.length === 0) {
+    fail("No local clone mappings are configured. Run `lgtm <pr-number>` inside a clone first.");
+  }
+
+  if (repositoryRef.owner) {
+    const repositoryKey = normalizeRepositoryKey(`${repositoryRef.owner}/${repositoryRef.repo}`);
+    const repositoryPath = settings.repoMappings[repositoryKey];
+
+    if (!repositoryPath) {
+      fail(`No local clone mapping found for ${repositoryRef.owner}/${repositoryRef.repo}.`);
+    }
+
+    const repository = await getGithubRepository(repositoryPath);
+    return { repositoryPath, repository };
+  }
+
+  const requestedRepo = normalizeRepositoryKey(repositoryRef.repo);
+  const matches = entries.filter(([repositoryKey]) => {
+    const [, mappedRepo = ""] = repositoryKey.split("/");
+    return mappedRepo === requestedRepo;
+  });
+
+  if (matches.length === 0) {
+    fail(`No local clone mapping found for ${repositoryRef.repo}.`);
+  }
+
+  if (matches.length > 1) {
+    const choices = matches.map(([repositoryKey]) => repositoryKey).sort();
+    fail(
+      `Repository name \`${repositoryRef.repo}\` is ambiguous. Use one of: ${choices.join(", ")}`
+    );
+  }
+
+  const [, repositoryPath] = matches[0];
+  const repository = await getGithubRepository(repositoryPath);
+  return { repositoryPath, repository };
 }
 
 function isProcessAlive(pid) {
@@ -611,16 +695,31 @@ async function openUrl(url) {
 }
 
 async function main() {
-  const { prNumber, provider, port, openBrowser } = parseArgs(process.argv.slice(2));
+  const { repositoryRef, prNumber, provider, port, openBrowser } = parseArgs(
+    process.argv.slice(2)
+  );
 
   await ensureStorageRoot();
 
-  const repositoryPath = await getGitRepositoryRoot().catch((error) => {
-    fail(error instanceof Error ? error.message : "Current directory is not a git repository.");
-  });
-  const repository = await getGithubRepository(repositoryPath);
+  const { repositoryPath, repository } = repositoryRef
+    ? await resolveMappedRepository(repositoryRef)
+    : await (async () => {
+        const resolvedRepositoryPath = await getGitRepositoryRoot().catch((error) => {
+          fail(error instanceof Error ? error.message : "Current directory is not a git repository.");
+        });
+        const resolvedRepository = await getGithubRepository(resolvedRepositoryPath);
 
-  await registerRepositoryMapping(repository.owner, repository.repo, repositoryPath);
+        await registerRepositoryMapping(
+          resolvedRepository.owner,
+          resolvedRepository.repo,
+          resolvedRepositoryPath
+        );
+
+        return {
+          repositoryPath: resolvedRepositoryPath,
+          repository: resolvedRepository
+        };
+      })();
 
   const server = await ensureServerInstance(port);
   const analysisLookup = await lookupPullRequestAnalysis({

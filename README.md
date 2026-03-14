@@ -25,6 +25,13 @@ npm link
 lgtm 123
 ```
 
+Or launch against an already-mapped clone from anywhere:
+
+```bash
+lgtm owner/repo 123
+lgtm repo 123
+```
+
 The launcher will:
 
 - infer `owner/repo` from the `origin` remote
@@ -37,6 +44,7 @@ Optional flags:
 
 ```bash
 lgtm 123 --provider claude
+lgtm owner/repo 123 --provider claude
 lgtm 123 --port 5180
 lgtm 123 --no-open
 ```
