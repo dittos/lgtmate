@@ -33,5 +33,18 @@ npm run demo:import-analysis -- mastodon mastodon 19059 codex
 That copies the cached file from `~/.lgtmate/analyses/...` into
 `src/demo/analyses/...`, where Vite can lazy-load it.
 
-Set `VITE_ANALYSIS_SOURCE=bundled` for the public demo build so the app reads
-bundled analysis JSON instead of calling `/api/analyzer`.
+The demo build env is checked into `.env.demo`:
+
+```env
+VITE_ANALYSIS_SOURCE=bundled
+VITE_GITHUB_API_BASE_URL=https://api.github.com
+```
+
+Build the public demo with:
+
+```bash
+npm run build:demo
+```
+
+That makes the app read bundled analysis JSON instead of calling `/api/analyzer`,
+while still loading PR metadata and files from GitHub.
