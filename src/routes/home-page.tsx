@@ -5,16 +5,8 @@ import { Button } from "@/components/ui/button";
 
 const EXAMPLE_PULL_REQUESTS = [
   {
-    href: "/facebook/react/pull/9580",
-    label: "facebook/react#9580"
-  },
-  {
-    href: "/kubernetes/kubernetes/pull/46669",
-    label: "kubernetes/kubernetes#46669"
-  },
-  {
-    href: "/square/okhttp/pull/3207",
-    label: "square/okhttp#3207"
+    href: "/mastodon/mastodon/pull/19059",
+    label: "mastodon/mastodon#19059"
   }
 ];
 
@@ -129,7 +121,7 @@ export function HomePage() {
 
             <div className="mt-8 rounded-2xl border border-border/60 bg-background/45 p-5">
               <p className="text-sm text-muted-foreground">
-                Try an example pull request:
+                Demo pull request with bundled analysis:
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {EXAMPLE_PULL_REQUESTS.map((pullRequest) => (

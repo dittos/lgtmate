@@ -9,6 +9,13 @@ import {
   type AnalyzerProvider,
   type AnalyzerProviderAvailability
 } from "./analyzer";
+import {
+  BUNDLED_ANALYSIS_REPOSITORY_STATE,
+  DEMO_PROVIDER_REASON,
+  getAnalysisSourceMode,
+  getBundledAnalysisAvailability,
+  loadBundledAnalysis
+} from "./demo-analysis";
 
 type AnalysisRepositoryState = {
   hasMapping: boolean;
@@ -44,6 +51,8 @@ const DEFAULT_REPOSITORY: AnalysisRepositoryState = {
   path: null,
   error: null
 };
+
+const ANALYSIS_SOURCE_MODE = getAnalysisSourceMode();
 
 function buildControllerKey(input: AnalysisControllerKey) {
   return `${input.owner}/${input.repo}#${input.number}:${input.provider}`;
@@ -94,6 +103,32 @@ class AnalysisController {
     }));
 
     try {
+      if (ANALYSIS_SOURCE_MODE === "bundled") {
+        const analysis = await loadBundledAnalysis(
+          this.owner,
+          this.repo,
+          this.number,
+          this.provider
+        );
+
+        if (requestId !== this.loadRequestId) {
+          return;
+        }
+
+        this.setState((current) => ({
+          ...current,
+          analysis,
+          repository: BUNDLED_ANALYSIS_REPOSITORY_STATE,
+          providers: getBundledAnalysisAvailability(),
+          job: null,
+          isLookupLoading: false,
+          isStreamConnected: false,
+          error: null
+        }));
+        this.ensureJobSubscription(null);
+        return;
+      }
+
       const response = await getPullRequestAnalysis(
         this.owner,
         this.repo,
@@ -119,6 +154,34 @@ class AnalysisController {
       }));
       this.ensureJobSubscription(response.job);
     } catch (error) {
+      if (ANALYSIS_SOURCE_MODE === "auto") {
+        const analysis = await loadBundledAnalysis(
+          this.owner,
+          this.repo,
+          this.number,
+          this.provider
+        );
+
+        if (requestId !== this.loadRequestId) {
+          return;
+        }
+
+        if (analysis) {
+          this.setState((current) => ({
+            ...current,
+            analysis,
+            repository: BUNDLED_ANALYSIS_REPOSITORY_STATE,
+            providers: getBundledAnalysisAvailability(),
+            job: null,
+            isLookupLoading: false,
+            isStreamConnected: false,
+            error: null
+          }));
+          this.ensureJobSubscription(null);
+          return;
+        }
+      }
+
       if (requestId !== this.loadRequestId) {
         return;
       }
@@ -136,6 +199,14 @@ class AnalysisController {
   }
 
   async analyze(options: { forceRefresh?: boolean } = {}) {
+    if (ANALYSIS_SOURCE_MODE === "bundled") {
+      this.setState((current) => ({
+        ...current,
+        error: DEMO_PROVIDER_REASON
+      }));
+      return;
+    }
+
     const requestId = this.analyzeRequestId + 1;
     this.analyzeRequestId = requestId;
     this.setState((current) => ({

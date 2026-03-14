@@ -11,12 +11,19 @@ import {
   Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from "@/components/ui/tooltip";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import {
   useAnalysisController,
   useAnalysisControllerSelector
 } from "@/lib/analysis-controller";
 import type { AnalyzerProvider } from "@/lib/analyzer";
+import { getAnalysisSourceMode, isDemoProviderReason } from "@/lib/demo-analysis";
 import type { GithubPullRequestFileNode } from "@/lib/github";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +40,8 @@ type CompressedDirectoryNode = {
 };
 
 type TreeMode = "smart" | "plain";
+
+const ANALYSIS_SOURCE_MODE = getAnalysisSourceMode();
 
 function getFileChangeClasses(changeType: string, isSelected: boolean) {
   switch (changeType) {
@@ -255,6 +264,10 @@ function SmartModeEmptyState({
   onAnalyze: (provider: AnalyzerProvider) => void;
   blockedReason: string | null;
 }) {
+  const analyzeDisabledReason = !canAnalyze && isDemoProviderReason(blockedReason)
+    ? blockedReason
+    : undefined;
+
   return (
     <div className="rounded-2xl border border-dashed border-border/70 bg-background/70 p-4">
       {isLoading ? (
@@ -268,18 +281,37 @@ function SmartModeEmptyState({
             No smart grouping is cached yet. Analyze this pull request to organize
             the changed files by concern.
           </p>
-          {blockedReason ? (
+          {blockedReason && !isDemoProviderReason(blockedReason) ? (
             <p className="text-sm text-destructive">{blockedReason}</p>
           ) : null}
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => onAnalyze(provider)}
-            disabled={!canAnalyze}
-          >
-            <Sparkles className="size-4" />
-            Analyze
-          </Button>
+          {analyzeDisabledReason ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => onAnalyze(provider)}
+                    disabled={!canAnalyze}
+                  >
+                    <Sparkles className="size-4" />
+                    Analyze
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{analyzeDisabledReason}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => onAnalyze(provider)}
+              disabled={!canAnalyze}
+            >
+              <Sparkles className="size-4" />
+              Analyze
+            </Button>
+          )}
         </div>
       )}
     </div>
@@ -346,13 +378,28 @@ export function FileTree({
     providerAvailability.available &&
     !isSmartLoading;
   const isOutdated = Boolean(analysis && analysis.headOid !== pullRequestHeadOid);
-  const blockedReason =
-    repositoryError ?? (!hasMapping ? "A local repository mapping is required." : smartError);
+  const blockedReason = isDemoProviderReason(providerAvailability.reason)
+    ? providerAvailability.reason
+    : repositoryError ?? (!hasMapping ? "A local repository mapping is required." : smartError);
 
   useEffect(() => {
     setCollapsedGroups({});
     setCollapsedChildren({});
   }, [analysis?.completedAt]);
+
+  useEffect(() => {
+    if (ANALYSIS_SOURCE_MODE !== "bundled" || isLookupLoading) {
+      return;
+    }
+
+    setMode((current) => {
+      if (analysis) {
+        return current === "plain" ? current : "smart";
+      }
+
+      return current === "smart" ? "plain" : current;
+    });
+  }, [analysis, isLookupLoading]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">

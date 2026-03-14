@@ -3,10 +3,19 @@ import { AlertCircle, ChevronDown, LoaderCircle, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from "@/components/ui/tooltip";
+import {
   useAnalysisController,
   useAnalysisControllerSelector
 } from "@/lib/analysis-controller";
 import type { AnalyzerProvider } from "@/lib/analyzer";
+import { getAnalysisSourceMode, isDemoProviderReason } from "@/lib/demo-analysis";
+
+const ANALYSIS_SOURCE_MODE = getAnalysisSourceMode();
 
 function getProviderLabel(provider: AnalyzerProvider) {
   return provider === "codex" ? "Codex" : "Claude";
@@ -75,6 +84,10 @@ export function PrAnalysisPanel({
     hasMapping && !repositoryError && providerState.available && !isLoading;
   const alternateProvider: AnalyzerProvider = provider === "codex" ? "claude" : "codex";
   const alternateProviderState = providerAvailability[alternateProvider];
+  const analyzeDisabledReason =
+    !canAnalyze && isDemoProviderReason(providerState.reason)
+      ? providerState.reason
+      : undefined;
 
   useEffect(() => {
     if (!isProviderMenuOpen) {
@@ -106,7 +119,7 @@ export function PrAnalysisPanel({
   }, [isProviderMenuOpen]);
 
   let statusTone = "text-muted-foreground";
-  let statusContent: ReactNode = "Run analysis to start the review.";
+  let statusContent: ReactNode = null;
 
   if (isLoading) {
     statusContent = (
@@ -120,18 +133,6 @@ export function PrAnalysisPanel({
         ) : null}
       </span>
     );
-  } else if (repositoryError) {
-    statusTone = "text-destructive";
-    statusContent = repositoryError;
-  } else if (!providerState.available) {
-    statusTone = "text-destructive";
-    statusContent = providerState.reason;
-  } else if (error) {
-    statusTone = "text-destructive";
-    statusContent = error;
-  } else if (warning) {
-    statusTone = "text-amber-700 dark:text-amber-300";
-    statusContent = warning;
   } else if (analysis) {
     statusContent = (
       <>
@@ -147,22 +148,56 @@ export function PrAnalysisPanel({
         ) : null}
       </>
     );
+  } else if (repositoryError) {
+    statusTone = "text-destructive";
+    statusContent = repositoryError;
+  } else if (!providerState.available && !isDemoProviderReason(providerState.reason)) {
+    statusTone = "text-destructive";
+    statusContent = providerState.reason;
+  } else if (error) {
+    statusTone = "text-destructive";
+    statusContent = error;
+  } else if (warning) {
+    statusTone = "text-amber-700 dark:text-amber-300";
+    statusContent = warning;
+  } else if (ANALYSIS_SOURCE_MODE !== "bundled") {
+    statusContent = "Run analysis to start the review.";
   }
 
   return (
     <div className="flex w-full max-w-md shrink-0 flex-col justify-center space-y-2 md:w-[26rem] md:text-right">
       <div className="flex justify-start md:justify-end">
         <div ref={providerMenuRef} className="relative flex items-center">
-          <Button
-            type="button"
-            onClick={() => onAnalyze(provider)}
-            disabled={!canAnalyze}
-            size="lg"
-            className="rounded-r-none"
-          >
-            <Sparkles className="size-4" />
-            {analysis ? "Re-analyze" : "Analyze"} with {getProviderLabel(provider)}
-          </Button>
+          {analyzeDisabledReason ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <Button
+                    type="button"
+                    onClick={() => onAnalyze(provider)}
+                    disabled={!canAnalyze}
+                    size="lg"
+                    className="rounded-r-none"
+                  >
+                    <Sparkles className="size-4" />
+                    {analysis ? "Re-analyze" : "Analyze"} with {getProviderLabel(provider)}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{analyzeDisabledReason}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <Button
+              type="button"
+              onClick={() => onAnalyze(provider)}
+              disabled={!canAnalyze}
+              size="lg"
+              className="rounded-r-none"
+            >
+              <Sparkles className="size-4" />
+              {analysis ? "Re-analyze" : "Analyze"} with {getProviderLabel(provider)}
+            </Button>
+          )}
           <Button
             type="button"
             aria-label={`Select analyzer provider, current ${getProviderLabel(provider)}`}
@@ -201,7 +236,8 @@ export function PrAnalysisPanel({
                   {analysis ? "Re-analyze" : "Analyze"} with{" "}
                   {getProviderLabel(alternateProvider)}
                 </span>
-                {!alternateProviderState.available ? (
+                {!alternateProviderState.available &&
+                !isDemoProviderReason(alternateProviderState.reason) ? (
                   <span className="text-xs text-destructive">Unavailable</span>
                 ) : null}
               </button>
@@ -209,11 +245,13 @@ export function PrAnalysisPanel({
           ) : null}
         </div>
       </div>
-      <div
-        className={`flex flex-wrap items-center justify-start gap-x-3 gap-y-1 text-sm ${statusTone} md:justify-end`}
-      >
-        {statusContent}
-      </div>
+      {statusContent ? (
+        <div
+          className={`flex flex-wrap items-center justify-start gap-x-3 gap-y-1 text-sm ${statusTone} md:justify-end`}
+        >
+          {statusContent}
+        </div>
+      ) : null}
     </div>
   );
 }

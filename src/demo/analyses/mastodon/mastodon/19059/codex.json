@@ -1,0 +1,419 @@
+{
+  "repository": {
+    "owner": "mastodon",
+    "repo": "mastodon"
+  },
+  "number": 19059,
+  "provider": "codex",
+  "model": "gpt-5.4",
+  "completedAt": "2026-03-14T10:25:34.906Z",
+  "headOid": "0027772528a354ca22d443b90c3bb62af8aef88e",
+  "baseOid": "062b3c9090c6935d4bf754e7aeb37793a2aa7b68",
+  "analysis": {
+    "groups": [
+      {
+        "id": "public-group-surfaces",
+        "title": "Public Group Surfaces",
+        "rationale": "User-facing web pages and REST endpoints for browsing groups, memberships, and group posts.",
+        "children": [
+          {
+            "id": "public-web",
+            "title": "Web Pages",
+            "filePaths": [
+              "app/controllers/concerns/group_owned_concern.rb",
+              "app/controllers/group_members_controller.rb",
+              "app/controllers/groups_controller.rb",
+              "app/helpers/accounts_helper.rb",
+              "app/helpers/application_helper.rb",
+              "app/helpers/home_helper.rb",
+              "app/helpers/statuses_helper.rb",
+              "app/views/application/_group_card.html.haml",
+              "app/views/group_members/index.html.haml",
+              "app/views/groups/show.html.haml",
+              "spec/controllers/group_members_controller_spec.rb",
+              "spec/controllers/groups_controller_spec.rb"
+            ]
+          },
+          {
+            "id": "public-api",
+            "title": "REST Endpoints",
+            "filePaths": [
+              "app/controllers/api/v1/groups_controller.rb",
+              "app/controllers/api/v1/groups/blocks_controller.rb",
+              "app/controllers/api/v1/groups/membership_requests_controller.rb",
+              "app/controllers/api/v1/groups/memberships_controller.rb",
+              "app/controllers/api/v1/groups/relationships_controller.rb",
+              "app/controllers/api/v1/groups/statuses_controller.rb",
+              "app/controllers/api/v1/statuses_controller.rb",
+              "app/controllers/api/v1/timelines/group_controller.rb",
+              "spec/controllers/api/v1/groups_controller_spec.rb",
+              "spec/controllers/api/v1/groups/blocks_controller_spec.rb",
+              "spec/controllers/api/v1/groups/membership_requests_controller_spec.rb",
+              "spec/controllers/api/v1/groups/memberships_controller_spec.rb",
+              "spec/controllers/api/v1/groups/relationships_controller_spec.rb",
+              "spec/controllers/api/v1/groups/statuses_controller_spec.rb",
+              "spec/controllers/api/v1/statuses_controller_spec.rb",
+              "spec/controllers/api/v1/timelines/group_controller_spec.rb"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group-frontend",
+        "title": "Group Frontend",
+        "rationale": "Client routes, screens, components, and state for the in-app group experience.",
+        "children": [
+          {
+            "id": "group-screens",
+            "title": "Routes and Screens",
+            "filePaths": [
+              "app/javascript/mastodon/features/getting_started/index.js",
+              "app/javascript/mastodon/features/group_blocks/index.js",
+              "app/javascript/mastodon/features/group_members/index.js",
+              "app/javascript/mastodon/features/group_membership_requests/index.js",
+              "app/javascript/mastodon/features/group_timeline/index.js",
+              "app/javascript/mastodon/features/groups/index.js",
+              "app/javascript/mastodon/features/ui/components/columns_area.js",
+              "app/javascript/mastodon/features/ui/components/group_panel.js",
+              "app/javascript/mastodon/features/ui/components/navigation_panel.js",
+              "app/javascript/mastodon/features/ui/index.js",
+              "app/javascript/mastodon/features/ui/util/async-components.js"
+            ]
+          },
+          {
+            "id": "group-components",
+            "title": "Containers and Components",
+            "filePaths": [
+              "app/javascript/mastodon/components/group_display_name.js",
+              "app/javascript/mastodon/components/group.js",
+              "app/javascript/mastodon/containers/group_container.js",
+              "app/javascript/mastodon/features/group_members/components/membership.js",
+              "app/javascript/mastodon/features/group_members/containers/membership_container.js",
+              "app/javascript/mastodon/features/group_membership_requests/containers/account_authorize_container.js",
+              "app/javascript/mastodon/features/group_timeline/components/group_header.js",
+              "app/javascript/mastodon/features/group_timeline/containers/group_header_container.js",
+              "app/javascript/mastodon/features/groups/components/new_group_form.js"
+            ]
+          },
+          {
+            "id": "group-state",
+            "title": "State and Actions",
+            "filePaths": [
+              "app/javascript/mastodon/actions/groups.js",
+              "app/javascript/mastodon/reducers/group_editor.js",
+              "app/javascript/mastodon/reducers/group_memberships.js",
+              "app/javascript/mastodon/reducers/group_relationships.js",
+              "app/javascript/mastodon/reducers/groups.js",
+              "app/javascript/mastodon/reducers/index.js"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group-domain",
+        "title": "Group Domain",
+        "rationale": "Core schema, models, policies, serializers, lifecycle services, and their focused tests.",
+        "children": [
+          {
+            "id": "group-models",
+            "title": "Schema and Models",
+            "filePaths": [
+              "app/models/concerns/account_interactions.rb",
+              "app/models/concerns/group_counters.rb",
+              "app/models/concerns/group_relationship_cacheable.rb",
+              "app/models/group_account_block.rb",
+              "app/models/group_deletion_request.rb",
+              "app/models/group_feed.rb",
+              "app/models/group_filter.rb",
+              "app/models/group_membership_filter.rb",
+              "app/models/group_membership_request.rb",
+              "app/models/group_membership.rb",
+              "app/models/group_stat.rb",
+              "app/models/group.rb",
+              "app/models/status.rb",
+              "app/models/user_role.rb",
+              "app/policies/group_membership_policy.rb",
+              "app/policies/group_membership_request_policy.rb",
+              "app/policies/group_policy.rb",
+              "app/policies/status_policy.rb",
+              "app/presenters/group_relationships_presenter.rb",
+              "app/serializers/rest/group_membership_serializer.rb",
+              "app/serializers/rest/group_relationship_serializer.rb",
+              "app/serializers/rest/group_serializer.rb",
+              "app/validators/status_group_validator.rb",
+              "app/validators/status_pin_validator.rb",
+              "db/migrate/20221022143208_create_groups.rb",
+              "db/migrate/20221022152927_create_group_memberships.rb",
+              "db/migrate/20221022153455_create_group_membership_requests.rb",
+              "db/migrate/20221022153555_create_group_account_blocks.rb",
+              "db/migrate/20221022161420_add_group_id_to_statuses.rb",
+              "db/migrate/20221022172530_group_ids_to_timestamp_ids.rb",
+              "db/migrate/20221022182735_create_group_stats.rb",
+              "db/migrate/20221022192931_create_group_deletion_requests.rb",
+              "db/migrate/20221022193523_add_approval_status_to_statuses.rb",
+              "db/schema.rb"
+            ]
+          },
+          {
+            "id": "group-lifecycle",
+            "title": "Lifecycle Services",
+            "filePaths": [
+              "app/services/approve_group_status_service.rb",
+              "app/services/authorize_membership_service.rb",
+              "app/services/delete_group_service.rb",
+              "app/services/join_group_service.rb",
+              "app/services/leave_group_service.rb",
+              "app/services/reject_group_status_service.rb",
+              "app/services/reject_membership_service.rb",
+              "app/services/revoke_membership_service.rb",
+              "app/services/suspend_group_service.rb",
+              "app/services/unsuspend_group_service.rb",
+              "app/workers/admin/group_deletion_worker.rb",
+              "app/workers/admin/group_suspension_worker.rb",
+              "app/workers/admin/group_unsuspension_worker.rb",
+              "app/workers/group_deletion_worker.rb",
+              "app/workers/scheduler/user_cleanup_scheduler.rb"
+            ]
+          },
+          {
+            "id": "group-domain-tests",
+            "title": "Domain Tests",
+            "filePaths": [
+              "spec/fabricators/group_account_block_fabricator.rb",
+              "spec/fabricators/group_deletion_request_fabricator.rb",
+              "spec/fabricators/group_fabricator.rb",
+              "spec/fabricators/group_membership_fabricator.rb",
+              "spec/fabricators/group_membership_request_fabricator.rb",
+              "spec/fabricators/user_role_fabricator.rb",
+              "spec/models/concerns/group_counters_spec.rb",
+              "spec/models/group_account_block_spec.rb",
+              "spec/models/group_feed_spec.rb",
+              "spec/models/group_filter_spec.rb",
+              "spec/models/group_membership_filter_spec.rb",
+              "spec/models/group_membership_request_spec.rb",
+              "spec/models/group_membership_spec.rb",
+              "spec/models/group_spec.rb",
+              "spec/presenters/group_relationships_presenter_spec.rb",
+              "spec/services/join_group_service_spec.rb",
+              "spec/services/leave_group_service_spec.rb",
+              "spec/services/revoke_membership_service_spec.rb",
+              "spec/services/suspend_group_service_spec.rb",
+              "spec/services/unsuspend_group_service_spec.rb",
+              "spec/validators/status_group_validator_spec.rb",
+              "spec/validators/status_pin_validator_spec.rb",
+              "spec/workers/scheduler/user_cleanup_scheduler_spec.rb"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group-federation",
+        "title": "Group Federation",
+        "rationale": "ActivityPub endpoints, protocol handling, remote actor processing, and delivery for groups.",
+        "children": [
+          {
+            "id": "federation-endpoints",
+            "title": "Federation Endpoints",
+            "filePaths": [
+              "app/controllers/activitypub/group_inboxes_controller.rb",
+              "app/controllers/activitypub/group_outboxes_controller.rb",
+              "app/controllers/activitypub/inboxes_controller.rb",
+              "app/controllers/activitypub/walls_controller.rb",
+              "app/helpers/context_helper.rb",
+              "spec/controllers/activitypub/group_inboxes_controller_spec.rb",
+              "spec/controllers/activitypub/group_outboxes_controller_spec.rb",
+              "spec/controllers/activitypub/walls_controller_spec.rb"
+            ]
+          },
+          {
+            "id": "federation-protocol",
+            "title": "Protocol Handlers",
+            "filePaths": [
+              "app/lib/activitypub/activity.rb",
+              "app/lib/activitypub/activity/create.rb",
+              "app/lib/activitypub/activity/delete.rb",
+              "app/lib/activitypub/activity/flag.rb",
+              "app/lib/activitypub/activity/join.rb",
+              "app/lib/activitypub/activity/leave.rb",
+              "app/lib/activitypub/forwarder.rb",
+              "app/lib/activitypub/group_activity/accept.rb",
+              "app/lib/activitypub/group_activity/add.rb",
+              "app/lib/activitypub/group_activity/delete.rb",
+              "app/lib/activitypub/group_activity/reject.rb",
+              "app/lib/activitypub/group_activity/remove.rb",
+              "app/lib/activitypub/group_activity/update.rb",
+              "app/lib/activitypub/parser/status_parser.rb",
+              "app/lib/activitypub/tag_manager.rb",
+              "app/presenters/activitypub/reject_create_presenter.rb",
+              "app/serializers/activitypub/accept_join_serializer.rb",
+              "app/serializers/activitypub/add_serializer.rb",
+              "app/serializers/activitypub/group_actor_serializer.rb",
+              "app/serializers/activitypub/join_serializer.rb",
+              "app/serializers/activitypub/leave_serializer.rb",
+              "app/serializers/activitypub/note_serializer.rb",
+              "app/serializers/activitypub/reject_create_serializer.rb",
+              "app/serializers/activitypub/reject_join_serializer.rb",
+              "app/serializers/activitypub/remove_serializer.rb",
+              "app/serializers/activitypub/undo_join_serializer.rb",
+              "app/serializers/activitypub/update_serializer.rb"
+            ]
+          },
+          {
+            "id": "federation-processing",
+            "title": "Remote Processing",
+            "filePaths": [
+              "app/services/activitypub/fetch_remote_actor_service.rb",
+              "app/services/activitypub/fetch_remote_status_service.rb",
+              "app/services/activitypub/process_collection_service.rb",
+              "app/services/activitypub/process_group_service.rb",
+              "app/workers/activitypub/delivery_worker.rb",
+              "app/workers/activitypub/group_delivery_worker.rb",
+              "app/workers/activitypub/group_raw_distribution_worker.rb",
+              "app/workers/activitypub/group_update_distribution_worker.rb",
+              "app/workers/activitypub/processing_worker.rb",
+              "app/workers/activitypub/update_remote_group_admins_worker.rb",
+              "app/workers/redownload_avatar_worker.rb",
+              "app/workers/redownload_header_worker.rb"
+            ]
+          },
+          {
+            "id": "federation-tests",
+            "title": "Federation Tests",
+            "filePaths": [
+              "spec/lib/activitypub/activity/create_spec.rb",
+              "spec/lib/activitypub/activity/delete_spec.rb",
+              "spec/lib/activitypub/activity/join_spec.rb",
+              "spec/lib/activitypub/activity/leave_spec.rb",
+              "spec/lib/activitypub/group_activity/accept_spec.rb",
+              "spec/lib/activitypub/group_activity/add_spec.rb",
+              "spec/lib/activitypub/group_activity/delete_spec.rb",
+              "spec/lib/activitypub/group_activity/reject_spec.rb",
+              "spec/lib/activitypub/group_activity/remove_spec.rb",
+              "spec/lib/activitypub/group_activity/update_spec.rb",
+              "spec/services/activitypub/fetch_remote_actor_service_spec.rb",
+              "spec/services/activitypub/fetch_remote_key_service_spec.rb",
+              "spec/workers/activitypub/group_delivery_worker_spec.rb",
+              "spec/workers/activitypub/group_distribution_worker_spec.rb",
+              "spec/workers/activitypub/update_remote_group_admins_worker_spec.rb",
+              "spec/workers/redownload_avatar_worker_spec.rb",
+              "spec/workers/redownload_header_worker_spec.rb"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "admin-group-moderation",
+        "title": "Admin Group Moderation",
+        "rationale": "Admin-side listing, moderation, suspension, and reporting flows for groups.",
+        "children": [
+          {
+            "id": "admin-group-ui",
+            "title": "Admin Controllers",
+            "filePaths": [
+              "app/controllers/admin/group_memberships_controller.rb",
+              "app/controllers/admin/group_statuses_controller.rb",
+              "app/controllers/admin/groups_controller.rb",
+              "app/controllers/api/v1/admin/groups_controller.rb",
+              "app/views/admin/group_memberships/index.html.haml",
+              "app/views/admin/group_statuses/index.html.haml",
+              "app/views/admin/groups/_group.html.haml",
+              "app/views/admin/groups/index.html.haml",
+              "app/views/admin/groups/show.html.haml",
+              "spec/controllers/admin/groups_controller_spec.rb",
+              "spec/controllers/api/v1/admin/groups_controller_spec.rb"
+            ]
+          },
+          {
+            "id": "admin-group-support",
+            "title": "Admin Support",
+            "filePaths": [
+              "app/helpers/admin/action_logs_helper.rb",
+              "app/helpers/admin/dashboard_helper.rb",
+              "app/models/admin/group_status_batch_action.rb",
+              "app/models/admin/group_status_filter.rb",
+              "app/models/form/group_batch.rb",
+              "app/views/admin/reports/_status.html.haml",
+              "config/locales/en.yml",
+              "config/navigation.rb",
+              "spec/models/admin/group_status_batch_action_spec.rb"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "cross-cutting-group-integration",
+        "title": "Cross-Cutting Group Integration",
+        "rationale": "Shared compose, search, reporting, streaming, and status plumbing updated to recognize group data.",
+        "children": [
+          {
+            "id": "client-integration",
+            "title": "Client Integration",
+            "filePaths": [
+              "app/javascript/mastodon/actions/compose.js",
+              "app/javascript/mastodon/actions/importer/index.js",
+              "app/javascript/mastodon/actions/importer/normalizer.js",
+              "app/javascript/mastodon/actions/reports.js",
+              "app/javascript/mastodon/actions/search.js",
+              "app/javascript/mastodon/actions/streaming.js",
+              "app/javascript/mastodon/actions/timelines.js",
+              "app/javascript/mastodon/components/status_action_bar.js",
+              "app/javascript/mastodon/components/status.js",
+              "app/javascript/mastodon/containers/status_container.js",
+              "app/javascript/mastodon/features/compose/components/privacy_dropdown.js",
+              "app/javascript/mastodon/features/compose/components/search_results.js",
+              "app/javascript/mastodon/features/compose/containers/privacy_dropdown_container.js",
+              "app/javascript/mastodon/features/explore/results.js",
+              "app/javascript/mastodon/features/report/components/status_check_box.js",
+              "app/javascript/mastodon/features/report/statuses.js",
+              "app/javascript/mastodon/features/status/components/action_bar.js",
+              "app/javascript/mastodon/features/status/components/detailed_status.js",
+              "app/javascript/mastodon/features/status/index.js",
+              "app/javascript/mastodon/features/ui/components/report_modal.js",
+              "app/javascript/mastodon/permissions.js",
+              "app/javascript/mastodon/reducers/compose.js",
+              "app/javascript/mastodon/reducers/search.js",
+              "app/javascript/mastodon/reducers/settings.js",
+              "app/javascript/mastodon/reducers/user_lists.js",
+              "app/javascript/mastodon/selectors/index.js",
+              "app/javascript/mastodon/stream.js",
+              "app/javascript/styles/mastodon/components.scss"
+            ]
+          },
+          {
+            "id": "server-integration",
+            "title": "Server Integration",
+            "filePaths": [
+              "app/lib/feed_manager.rb",
+              "app/lib/status_finder.rb",
+              "app/lib/status_reach_finder.rb",
+              "app/models/account_statuses_filter.rb",
+              "app/models/search.rb",
+              "app/serializers/rest/search_serializer.rb",
+              "app/serializers/rest/status_serializer.rb",
+              "app/services/fan_out_on_write_service.rb",
+              "app/services/post_status_service.rb",
+              "app/services/process_mentions_service.rb",
+              "app/services/remove_status_service.rb",
+              "app/services/report_service.rb",
+              "app/services/resolve_url_service.rb",
+              "app/services/search_service.rb",
+              "config/routes.rb",
+              "spec/lib/status_finder_spec.rb",
+              "spec/services/fan_out_on_write_service_spec.rb",
+              "spec/services/process_mentions_service_spec.rb",
+              "spec/services/remove_status_service_spec.rb",
+              "spec/services/report_service_spec.rb",
+              "spec/services/resolve_url_service_spec.rb",
+              "spec/services/search_service_spec.rb",
+              "streaming/index.js"
+            ]
+          }
+        ]
+      }
+    ],
+    "ungroupedPaths": [
+      "app/views/statuses/_simple_status.html.haml"
+    ],
+    "rawMarkdown": null
+  }
+}
