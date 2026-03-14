@@ -32,6 +32,20 @@ type PullRequestGraphqlResponse = {
   };
 };
 
+type AnalyzerStreamEvent =
+  | {
+      type: "progress";
+      message: string;
+    }
+  | {
+      type: "result";
+      result: StoredPullRequestAnalysis;
+    }
+  | {
+      type: "error";
+      error: string;
+    };
+
 const routePattern =
   /^\/pull-requests\/(?<owner>[^/]+)\/(?<repo>[^/]+)\/(?<number>\d+)\/?$/;
 
@@ -134,6 +148,18 @@ function buildStoredResult(
   };
 }
 
+function startAnalyzerStream(res: ServerResponse) {
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  return (event: AnalyzerStreamEvent) => {
+    res.write(`${JSON.stringify(event)}\n`);
+  };
+}
+
 export async function handlePullRequestAnalyzerRoute(
   req: IncomingMessage,
   res: ServerResponse
@@ -201,11 +227,14 @@ export async function handlePullRequestAnalyzerRoute(
       return;
     }
 
+    const writeEvent = startAnalyzerStream(res);
+
     const pullRequest = await fetchPullRequestAnalysisContext(
       params.owner,
       params.repo,
       params.number
     );
+    writeEvent({ type: "progress", message: "Loaded pull request metadata from GitHub." });
 
     if (!body.forceRefresh) {
       const cached = await readStoredAnalysis(
@@ -216,7 +245,9 @@ export async function handlePullRequestAnalyzerRoute(
       );
 
       if (cached && cached.headOid === pullRequest.headRefOid) {
-        sendJson(res, { ok: true, result: cached });
+        writeEvent({ type: "progress", message: "Using cached analysis for the current head commit." });
+        writeEvent({ type: "result", result: cached });
+        res.end();
         return;
       }
     }
@@ -224,14 +255,17 @@ export async function handlePullRequestAnalyzerRoute(
     const analyzer = createAnalyzer(body.provider);
     const startedAt = Date.now();
     let worktreePath: string | null = null;
+    let storedResult: StoredPullRequestAnalysis | null = null;
 
     try {
+      writeEvent({ type: "progress", message: "Creating isolated worktree for analysis..." });
       worktreePath = await createPullRequestWorktree({
         owner: params.owner,
         repo: params.repo,
         number: params.number,
         repositoryPath: mapping.path
       });
+      writeEvent({ type: "progress", message: "Worktree is ready. Starting analyzer..." });
 
       const result = await analyzer.analyzePullRequest({
         owner: params.owner,
@@ -243,15 +277,19 @@ export async function handlePullRequestAnalyzerRoute(
         worktreePath,
         headOid: pullRequest.headRefOid,
         baseOid: pullRequest.baseRefOid,
-        pullRequest
+        pullRequest,
+        onProgress: (event) => {
+          writeEvent({ type: "progress", message: event.message });
+        }
       });
-      const storedResult = buildStoredResult(
+      storedResult = buildStoredResult(
         params.owner,
         params.repo,
         params.number,
         result
       );
       const storedPath = await writeStoredAnalysis(storedResult);
+      writeEvent({ type: "progress", message: "Analysis complete. Saving cached result..." });
 
       console.info("[analyzer] completed", {
         provider: storedResult.provider,
@@ -262,10 +300,10 @@ export async function handlePullRequestAnalyzerRoute(
         latencyMs: Date.now() - startedAt
       });
 
-      sendJson(res, { ok: true, result: storedResult });
     } finally {
       if (worktreePath) {
         try {
+          writeEvent({ type: "progress", message: "Cleaning up temporary worktree..." });
           await removePullRequestWorktree(mapping.path, worktreePath);
         } catch (error) {
           console.error("[analyzer] failed to remove worktree", {
@@ -276,6 +314,11 @@ export async function handlePullRequestAnalyzerRoute(
         }
       }
     }
+
+    if (storedResult) {
+      writeEvent({ type: "result", result: storedResult });
+      res.end();
+    }
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to analyze pull request";
@@ -285,6 +328,12 @@ export async function handlePullRequestAnalyzerRoute(
       number: params.number,
       error: message
     });
-    sendJson(res, { ok: false, error: message }, 500);
+    if (!res.headersSent) {
+      sendJson(res, { ok: false, error: message }, 500);
+      return;
+    }
+
+    res.write(`${JSON.stringify({ type: "error", error: message } satisfies AnalyzerStreamEvent)}\n`);
+    res.end();
   }
 }

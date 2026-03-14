@@ -47,6 +47,7 @@ export type AnalyzePullRequestInput = {
   headOid: string;
   baseOid: string | null;
   pullRequest: PullRequestAnalysisInputPullRequest;
+  onProgress?: (event: PullRequestAnalysisProgressEvent) => void;
 };
 
 export type AnalyzePullRequestResult = {
@@ -77,4 +78,8 @@ export interface PullRequestAnalyzer {
 export type AnalyzerProviderAvailability = {
   available: boolean;
   reason: string | null;
+};
+
+export type PullRequestAnalysisProgressEvent = {
+  message: string;
 };

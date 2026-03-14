@@ -106,6 +106,7 @@ export function PullRequestPage() {
   const [isDiffLoading, setIsDiffLoading] = useState(false);
   const [isAnalysisLookupLoading, setIsAnalysisLookupLoading] = useState(true);
   const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState<string | null>(null);
   const [pullRequestError, setPullRequestError] = useState<string | null>(null);
   const [filesError, setFilesError] = useState<string | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
@@ -224,12 +225,14 @@ export function PullRequestPage() {
         setProviderAvailability(response.providers);
         setHasAnalysisMapping(response.repository.hasMapping);
         setAnalysisRepositoryError(response.repository.error);
+        setAnalysisProgress(null);
       } catch (error) {
         if (isActive) {
           setAnalysis(null);
           setAnalysisError(
             error instanceof Error ? error.message : "Failed to load analysis"
           );
+          setAnalysisProgress(null);
         }
       } finally {
         if (isActive) {
@@ -317,10 +320,15 @@ export function PullRequestPage() {
     try {
       setIsAnalysisLoading(true);
       setAnalysisError(null);
+      setAnalysisProgress("Requesting pull request analysis...");
 
       const response = await analyzePullRequest(owner, repo, number, {
         provider: analysisProvider,
         forceRefresh: true
+      }, {
+        onProgress: (event) => {
+          setAnalysisProgress(event.message);
+        }
       });
 
       setAnalysis(response.result);
@@ -330,6 +338,7 @@ export function PullRequestPage() {
       );
     } finally {
       setIsAnalysisLoading(false);
+      setAnalysisProgress(null);
     }
   }
 
@@ -472,6 +481,7 @@ export function PullRequestPage() {
                   analysis={analysis}
                   isOutdated={isAnalysisOutdated}
                   isLoading={isAnalysisLookupLoading || isAnalysisLoading}
+                  progressMessage={analysisProgress}
                   error={analysisError}
                   onAnalyze={() => {
                     void handleAnalyze();

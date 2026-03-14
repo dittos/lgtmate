@@ -26,6 +26,7 @@ export function AnalysisStatusCard({
   analysis,
   isOutdated,
   isLoading,
+  progressMessage,
   error,
   onAnalyze
 }: {
@@ -37,6 +38,7 @@ export function AnalysisStatusCard({
   analysis: AnalyzePullRequestResult | null;
   isOutdated: boolean;
   isLoading: boolean;
+  progressMessage: string | null;
   error: string | null;
   onAnalyze: () => void;
 }) {
@@ -94,7 +96,7 @@ export function AnalysisStatusCard({
         {isLoading ? (
           <div className="flex items-center gap-2 rounded-2xl border border-border/70 bg-muted/40 px-4 py-3 text-muted-foreground">
             <LoaderCircle className="size-4 animate-spin" />
-            Analyzing pull request in an isolated worktree...
+            {progressMessage ?? "Analyzing pull request in an isolated worktree..."}
           </div>
         ) : null}
         {analysis ? (

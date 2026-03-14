@@ -19,6 +19,7 @@ export class ClaudePullRequestAnalyzer implements PullRequestAnalyzer {
     const schemaPath = await ensureAnalyzerSchemaFile();
     const schema = await readFile(schemaPath, "utf8");
     const model = input.model?.trim() || this.defaultModel;
+    input.onProgress?.({ message: "Claude is analyzing the pull request..." });
     const { stdout } = await runCommand(
       "claude",
       [
@@ -34,7 +35,14 @@ export class ClaudePullRequestAnalyzer implements PullRequestAnalyzer {
         buildPullRequestAnalysisPrompt(input)
       ],
       {
-        cwd: input.worktreePath
+        cwd: input.worktreePath,
+        onStderr: (chunk) => {
+          const message = chunk.trim();
+
+          if (message) {
+            input.onProgress?.({ message });
+          }
+        }
       }
     );
 

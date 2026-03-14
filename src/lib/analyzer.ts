@@ -62,6 +62,26 @@ export type PullRequestAnalysisRunResponse = {
   result: AnalyzePullRequestResult;
 };
 
+export type PullRequestAnalysisProgressEvent = {
+  type: "progress";
+  message: string;
+};
+
+export type PullRequestAnalysisResultEvent = {
+  type: "result";
+  result: AnalyzePullRequestResult;
+};
+
+export type PullRequestAnalysisErrorEvent = {
+  type: "error";
+  error: string;
+};
+
+export type PullRequestAnalysisStreamEvent =
+  | PullRequestAnalysisProgressEvent
+  | PullRequestAnalysisResultEvent
+  | PullRequestAnalysisErrorEvent;
+
 function buildAnalyzerUrl(
   owner: string,
   repo: string,
@@ -99,16 +119,76 @@ export async function analyzePullRequest(
     provider: AnalyzerProvider;
     model?: string;
     forceRefresh?: boolean;
-  }
+  },
+  handlers: {
+    onProgress?: (event: PullRequestAnalysisProgressEvent) => void;
+  } = {}
 ) {
-  return fetchJson<PullRequestAnalysisRunResponse>(
-    buildAnalyzerUrl(owner, repo, number),
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(options)
+  const response = await fetch(buildAnalyzerUrl(owner, repo, number), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(options)
+  });
+
+  if (!response.ok) {
+    const data = (await response.json()) as { error?: unknown; message?: unknown };
+    const error =
+      typeof data.error === "string"
+        ? data.error
+        : typeof data.message === "string"
+          ? data.message
+          : "Unexpected API response";
+
+    throw new Error(error);
+  }
+
+  if (!response.body) {
+    throw new Error("The analyzer response stream was not available.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: AnalyzePullRequestResult | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+
+    let newlineIndex = buffer.indexOf("\n");
+
+    while (newlineIndex >= 0) {
+      const line = buffer.slice(0, newlineIndex).trim();
+      buffer = buffer.slice(newlineIndex + 1);
+
+      if (line) {
+        const event = JSON.parse(line) as PullRequestAnalysisStreamEvent;
+
+        if (event.type === "progress") {
+          handlers.onProgress?.(event);
+        } else if (event.type === "result") {
+          result = event.result;
+        } else {
+          throw new Error(event.error);
+        }
+      }
+
+      newlineIndex = buffer.indexOf("\n");
     }
-  );
+
+    if (done) {
+      break;
+    }
+  }
+
+  if (!result) {
+    throw new Error("The analyzer completed without returning a result.");
+  }
+
+  return {
+    ok: true,
+    result
+  } satisfies PullRequestAnalysisRunResponse;
 }

@@ -6,6 +6,8 @@ export function runCommand(
   options: {
     cwd?: string;
     input?: string;
+    onStdout?: (chunk: string) => void;
+    onStderr?: (chunk: string) => void;
   } = {}
 ) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
@@ -19,11 +21,15 @@ export function runCommand(
     let stderr = "";
 
     child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
+      const text = chunk.toString();
+      stdout += text;
+      options.onStdout?.(text);
     });
 
     child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
+      const text = chunk.toString();
+      stderr += text;
+      options.onStderr?.(text);
     });
 
     child.on("error", (error) => {
