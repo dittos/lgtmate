@@ -36,6 +36,34 @@ export type AnalyzerProviderAvailability = {
   reason: string | null;
 };
 
+export type AnalysisJobStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type AnalysisJobSnapshot = {
+  id: string;
+  owner: string;
+  repo: string;
+  number: number;
+  provider: AnalyzerProvider;
+  model: string;
+  headOid: string;
+  baseOid: string | null;
+  dedupeKey: string;
+  status: AnalysisJobStatus;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  updatedAt: string;
+  progressMessage: string | null;
+  progressSequence: number;
+  error: string | null;
+  resultPath: string | null;
+};
+
 export type PullRequestAnalysisLookupResponse = {
   ok: true;
   analysis: AnalyzePullRequestResult | null;
@@ -45,34 +73,57 @@ export type PullRequestAnalysisLookupResponse = {
     error: string | null;
   };
   providers: Record<AnalyzerProvider, AnalyzerProviderAvailability>;
+  job: AnalysisJobSnapshot | null;
 };
 
 export type PullRequestAnalysisRunResponse = {
   ok: true;
-  result: AnalyzePullRequestResult;
+  job: AnalysisJobSnapshot;
+  reusedExistingJob: boolean;
 };
 
-export type PullRequestAnalysisProgressEvent = {
+export type PullRequestAnalysisJobResponse = {
+  ok: true;
+  job: AnalysisJobSnapshot;
+};
+
+export type AnalysisJobSnapshotEvent = {
+  type: "snapshot";
+  job: AnalysisJobSnapshot;
+};
+
+export type AnalysisJobProgressEvent = {
   type: "progress";
+  jobId: string;
+  sequence: number;
   message: string;
+  status: "queued" | "running";
 };
 
-export type PullRequestAnalysisResultEvent = {
-  type: "result";
+export type AnalysisJobCompletedEvent = {
+  type: "completed";
+  job: AnalysisJobSnapshot;
   result: AnalyzePullRequestResult;
 };
 
-export type PullRequestAnalysisErrorEvent = {
-  type: "error";
-  error: string;
+export type AnalysisJobFailedEvent = {
+  type: "failed";
+  job: AnalysisJobSnapshot;
 };
 
-export type PullRequestAnalysisStreamEvent =
-  | PullRequestAnalysisProgressEvent
-  | PullRequestAnalysisResultEvent
-  | PullRequestAnalysisErrorEvent;
+export type AnalysisJobHeartbeatEvent = {
+  type: "heartbeat";
+  at: string;
+};
 
-function buildAnalyzerUrl(
+export type AnalysisJobStreamEvent =
+  | AnalysisJobSnapshotEvent
+  | AnalysisJobProgressEvent
+  | AnalysisJobCompletedEvent
+  | AnalysisJobFailedEvent
+  | AnalysisJobHeartbeatEvent;
+
+function buildPullRequestAnalyzerUrl(
   owner: string,
   repo: string,
   number: number,
@@ -90,6 +141,11 @@ function buildAnalyzerUrl(
   return `${url.pathname}${url.search}`;
 }
 
+function buildAnalysisJobUrl(jobId: string, stream = false) {
+  const suffix = stream ? "/stream" : "";
+  return `/api/analyzer/jobs/${jobId}${suffix}`;
+}
+
 export async function getPullRequestAnalysis(
   owner: string,
   repo: string,
@@ -97,7 +153,7 @@ export async function getPullRequestAnalysis(
   provider: AnalyzerProvider
 ) {
   return fetchJson<PullRequestAnalysisLookupResponse>(
-    buildAnalyzerUrl(owner, repo, number, provider)
+    buildPullRequestAnalyzerUrl(owner, repo, number, provider)
   );
 }
 
@@ -109,76 +165,48 @@ export async function analyzePullRequest(
     provider: AnalyzerProvider;
     model?: string;
     forceRefresh?: boolean;
-  },
-  handlers: {
-    onProgress?: (event: PullRequestAnalysisProgressEvent) => void;
-  } = {}
+  }
 ) {
-  const response = await fetch(buildAnalyzerUrl(owner, repo, number), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(options)
-  });
-
-  if (!response.ok) {
-    const data = (await response.json()) as { error?: unknown; message?: unknown };
-    const error =
-      typeof data.error === "string"
-        ? data.error
-        : typeof data.message === "string"
-          ? data.message
-          : "Unexpected API response";
-
-    throw new Error(error);
-  }
-
-  if (!response.body) {
-    throw new Error("The analyzer response stream was not available.");
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let result: AnalyzePullRequestResult | null = null;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value, { stream: !done });
-
-    let newlineIndex = buffer.indexOf("\n");
-
-    while (newlineIndex >= 0) {
-      const line = buffer.slice(0, newlineIndex).trim();
-      buffer = buffer.slice(newlineIndex + 1);
-
-      if (line) {
-        const event = JSON.parse(line) as PullRequestAnalysisStreamEvent;
-
-        if (event.type === "progress") {
-          handlers.onProgress?.(event);
-        } else if (event.type === "result") {
-          result = event.result;
-        } else {
-          throw new Error(event.error);
-        }
-      }
-
-      newlineIndex = buffer.indexOf("\n");
+  return fetchJson<PullRequestAnalysisRunResponse>(
+    buildPullRequestAnalyzerUrl(owner, repo, number),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(options)
     }
+  );
+}
 
-    if (done) {
-      break;
-    }
+export async function getAnalysisJob(jobId: string) {
+  return fetchJson<PullRequestAnalysisJobResponse>(buildAnalysisJobUrl(jobId));
+}
+
+export function subscribeToAnalysisJob(
+  jobId: string,
+  handlers: {
+    onOpen?: () => void;
+    onEvent?: (event: AnalysisJobStreamEvent) => void;
+    onError?: () => void;
   }
+) {
+  const source = new EventSource(buildAnalysisJobUrl(jobId, true));
 
-  if (!result) {
-    throw new Error("The analyzer completed without returning a result.");
-  }
+  source.onopen = () => {
+    handlers.onOpen?.();
+  };
 
-  return {
-    ok: true,
-    result
-  } satisfies PullRequestAnalysisRunResponse;
+  source.onmessage = (message) => {
+    const event = JSON.parse(message.data) as AnalysisJobStreamEvent;
+    handlers.onEvent?.(event);
+  };
+
+  source.onerror = () => {
+    handlers.onError?.();
+  };
+
+  return () => {
+    source.close();
+  };
 }

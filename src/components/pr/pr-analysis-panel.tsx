@@ -2,11 +2,11 @@ import type { ReactNode } from "react";
 import { AlertCircle, ChevronDown, LoaderCircle, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import type {
-  AnalyzePullRequestResult,
-  AnalyzerProvider,
-  AnalyzerProviderAvailability
-} from "@/lib/analyzer";
+import {
+  useAnalysisController,
+  useAnalysisControllerSelector
+} from "@/lib/analysis-controller";
+import type { AnalyzerProvider } from "@/lib/analyzer";
 
 function getProviderLabel(provider: AnalyzerProvider) {
   return provider === "codex" ? "Codex" : "Claude";
@@ -24,31 +24,53 @@ function formatCompletedAt(value: string) {
 }
 
 export function PrAnalysisPanel({
+  owner,
+  repo,
+  number,
   provider,
-  providerAvailability,
-  repositoryError,
-  hasMapping,
-  analysis,
-  isOutdated,
-  isLoading,
-  progressMessage,
-  error,
+  pullRequestHeadOid,
   onAnalyze
 }: {
+  owner: string;
+  repo: string;
+  number: number;
   provider: AnalyzerProvider;
-  providerAvailability: Record<AnalyzerProvider, AnalyzerProviderAvailability>;
-  repositoryError: string | null;
-  hasMapping: boolean;
-  analysis: AnalyzePullRequestResult | null;
-  isOutdated: boolean;
-  isLoading: boolean;
-  progressMessage: string | null;
-  error: string | null;
+  pullRequestHeadOid: string;
   onAnalyze: (provider: AnalyzerProvider) => void;
 }) {
   const [isProviderMenuOpen, setIsProviderMenuOpen] = useState(false);
   const providerMenuRef = useRef<HTMLDivElement | null>(null);
+  const controller = useAnalysisController({ owner, repo, number, provider });
+  const providerAvailability = useAnalysisControllerSelector(
+    controller,
+    (state) => state.providers
+  );
+  const repositoryError = useAnalysisControllerSelector(
+    controller,
+    (state) => state.repository.error
+  );
+  const hasMapping = useAnalysisControllerSelector(
+    controller,
+    (state) => state.repository.hasMapping
+  );
+  const analysis = useAnalysisControllerSelector(controller, (state) => state.analysis);
+  const job = useAnalysisControllerSelector(controller, (state) => state.job);
+  const isLookupLoading = useAnalysisControllerSelector(
+    controller,
+    (state) => state.isLookupLoading
+  );
+  const isStarting = useAnalysisControllerSelector(controller, (state) => state.isStarting);
+  const isStreamConnected = useAnalysisControllerSelector(
+    controller,
+    (state) => state.isStreamConnected
+  );
+  const error = useAnalysisControllerSelector(controller, (state) => state.error);
   const providerState = providerAvailability[provider];
+  const isOutdated = Boolean(analysis && analysis.headOid !== pullRequestHeadOid);
+  const isJobActive = job?.status === "queued" || job?.status === "running";
+  const isLoading = isLookupLoading || isStarting || isJobActive;
+  const progressMessage = job?.progressMessage ?? null;
+  const warning = analysis && job?.status === "failed" ? job.error : null;
   const canAnalyze =
     hasMapping && !repositoryError && providerState.available && !isLoading;
   const alternateProvider: AnalyzerProvider = provider === "codex" ? "claude" : "codex";
@@ -93,6 +115,9 @@ export function PrAnalysisPanel({
         <span className="truncate">
           {progressMessage ?? "Analyzing pull request in an isolated worktree..."}
         </span>
+        {!isStreamConnected && job ? (
+          <span className="text-xs text-muted-foreground/80">Reconnecting...</span>
+        ) : null}
       </span>
     );
   } else if (repositoryError) {
@@ -104,6 +129,9 @@ export function PrAnalysisPanel({
   } else if (error) {
     statusTone = "text-destructive";
     statusContent = error;
+  } else if (warning) {
+    statusTone = "text-amber-700 dark:text-amber-300";
+    statusContent = warning;
   } else if (analysis) {
     statusContent = (
       <>

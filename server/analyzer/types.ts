@@ -83,3 +83,61 @@ export type AnalyzerProviderAvailability = {
 export type PullRequestAnalysisProgressEvent = {
   message: string;
 };
+
+export type AnalysisJobStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type AnalysisJobSnapshot = {
+  id: string;
+  owner: string;
+  repo: string;
+  number: number;
+  provider: AnalyzerProvider;
+  model: string;
+  headOid: string;
+  baseOid: string | null;
+  dedupeKey: string;
+  status: AnalysisJobStatus;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  updatedAt: string;
+  progressMessage: string | null;
+  progressSequence: number;
+  error: string | null;
+  resultPath: string | null;
+};
+
+export type AnalysisJobRecord = AnalysisJobSnapshot & {
+  result: StoredPullRequestAnalysis | null;
+};
+
+export type AnalysisJobStreamEvent =
+  | {
+      type: "snapshot";
+      job: AnalysisJobSnapshot;
+    }
+  | {
+      type: "progress";
+      jobId: string;
+      sequence: number;
+      message: string;
+      status: "queued" | "running";
+    }
+  | {
+      type: "completed";
+      job: AnalysisJobSnapshot;
+      result: StoredPullRequestAnalysis;
+    }
+  | {
+      type: "failed";
+      job: AnalysisJobSnapshot;
+    }
+  | {
+      type: "heartbeat";
+      at: string;
+    };

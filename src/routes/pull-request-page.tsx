@@ -10,13 +10,8 @@ import { FileDiffPanel } from "@/components/pr/file-diff-panel";
 import { FileTree } from "@/components/pr/file-tree";
 import { PullRequestDescription } from "@/components/pr/pull-request-description";
 import { PullRequestHeader } from "@/components/pr/pull-request-header";
-import {
-  analyzePullRequest,
-  getPullRequestAnalysis,
-  type AnalyzePullRequestResult,
-  type AnalyzerProvider,
-  type AnalyzerProviderAvailability
-} from "@/lib/analyzer";
+import { type AnalyzerProvider } from "@/lib/analyzer";
+import { getAnalysisController, useAnalysisController } from "@/lib/analysis-controller";
 import {
   buildPullRequestFilePatch,
   getPullRequest,
@@ -65,16 +60,6 @@ function getStoredAnalysisProvider(): AnalyzerProvider {
     : "codex";
 }
 
-function getDefaultProviderAvailability(): Record<
-  AnalyzerProvider,
-  AnalyzerProviderAvailability
-> {
-  return {
-    codex: { available: false, reason: null },
-    claude: { available: false, reason: null }
-  };
-}
-
 export function PullRequestPage() {
   const params = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -91,31 +76,21 @@ export function PullRequestPage() {
   const [analysisProvider, setAnalysisProvider] = useState<AnalyzerProvider>(() =>
     getStoredAnalysisProvider()
   );
-  const [analysis, setAnalysis] = useState<AnalyzePullRequestResult | null>(null);
-  const [providerAvailability, setProviderAvailability] = useState(() =>
-    getDefaultProviderAvailability()
-  );
-  const [analysisRepositoryError, setAnalysisRepositoryError] = useState<string | null>(
-    null
-  );
-  const [hasAnalysisMapping, setHasAnalysisMapping] = useState(false);
   const [isPullRequestLoading, setIsPullRequestLoading] = useState(true);
   const [isFilesLoading, setIsFilesLoading] = useState(true);
   const [isDiffLoading, setIsDiffLoading] = useState(false);
-  const [isAnalysisLookupLoading, setIsAnalysisLookupLoading] = useState(true);
-  const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
-  const [analysisProgress, setAnalysisProgress] = useState<string | null>(null);
   const [pullRequestError, setPullRequestError] = useState<string | null>(null);
   const [filesError, setFilesError] = useState<string | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [fileTreeWidth, setFileTreeWidth] = useState(() => getStoredFileTreeWidth());
   const [isResizing, setIsResizing] = useState(false);
   const splitContainerRef = useRef<HTMLDivElement | null>(null);
-
-  const isAnalysisOutdated = Boolean(
-    pullRequest && analysis && analysis.headOid !== pullRequest.headRefOid
-  );
+  const analysisController = useAnalysisController({
+    owner,
+    repo,
+    number,
+    provider: analysisProvider
+  });
 
   useEffect(() => {
     let isActive = true;
@@ -201,50 +176,8 @@ export function PullRequestPage() {
   }, [owner, repo, number, selectedPath]);
 
   useEffect(() => {
-    let isActive = true;
-
-    async function loadAnalysis() {
-      try {
-        setIsAnalysisLookupLoading(true);
-        setAnalysisError(null);
-
-        const response = await getPullRequestAnalysis(
-          owner,
-          repo,
-          number,
-          analysisProvider
-        );
-
-        if (!isActive) {
-          return;
-        }
-
-        setAnalysis(response.analysis);
-        setProviderAvailability(response.providers);
-        setHasAnalysisMapping(response.repository.hasMapping);
-        setAnalysisRepositoryError(response.repository.error);
-        setAnalysisProgress(null);
-      } catch (error) {
-        if (isActive) {
-          setAnalysis(null);
-          setAnalysisError(
-            error instanceof Error ? error.message : "Failed to load analysis"
-          );
-          setAnalysisProgress(null);
-        }
-      } finally {
-        if (isActive) {
-          setIsAnalysisLookupLoading(false);
-        }
-      }
-    }
-
-    void loadAnalysis();
-
-    return () => {
-      isActive = false;
-    };
-  }, [analysisProvider, owner, repo, number]);
+    void analysisController.load();
+  }, [analysisController]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -315,36 +248,14 @@ export function PullRequestPage() {
   }
 
   async function handleAnalyze(nextProvider: AnalyzerProvider = analysisProvider) {
-    try {
-      setIsAnalysisLoading(true);
-      setAnalysisError(null);
-      setAnalysisProgress("Requesting pull request analysis...");
-      setAnalysisProvider(nextProvider);
-
-      const response = await analyzePullRequest(
-        owner,
-        repo,
-        number,
-        {
-          provider: nextProvider,
-          forceRefresh: true
-        },
-        {
-          onProgress: (event) => {
-            setAnalysisProgress(event.message);
-          }
-        }
-      );
-
-      setAnalysis(response.result);
-    } catch (error) {
-      setAnalysisError(
-        error instanceof Error ? error.message : "Failed to analyze pull request"
-      );
-    } finally {
-      setIsAnalysisLoading(false);
-      setAnalysisProgress(null);
-    }
+    setAnalysisProvider(nextProvider);
+    const targetController = getAnalysisController({
+      owner,
+      repo,
+      number,
+      provider: nextProvider
+    });
+    await targetController.analyze({ forceRefresh: true });
   }
 
   function handleResizeStart(event: ReactPointerEvent<HTMLDivElement>) {
@@ -430,15 +341,10 @@ export function PullRequestPage() {
       <section className="flex h-full flex-col border border-border/70 bg-card/75 shadow-sm backdrop-blur-md">
         <PullRequestHeader
           pullRequest={pullRequest}
+          owner={owner}
+          repo={repo}
+          number={number}
           provider={analysisProvider}
-          providerAvailability={providerAvailability}
-          repositoryError={analysisRepositoryError}
-          hasMapping={hasAnalysisMapping}
-          analysis={analysis}
-          isOutdated={isAnalysisOutdated}
-          isLoading={isAnalysisLookupLoading || isAnalysisLoading}
-          progressMessage={analysisProgress}
-          error={analysisError}
           onAnalyze={(nextProvider) => {
             void handleAnalyze(nextProvider);
           }}
@@ -454,23 +360,15 @@ export function PullRequestPage() {
               <div className="px-5 py-5 text-sm text-destructive">{filesError}</div>
             ) : (
               <FileTree
+                owner={owner}
+                repo={repo}
+                number={number}
                 files={files}
                 selectedPath={selectedPath}
                 onSelect={handleSelectFile}
                 onSelectDescription={handleSelectDescription}
-                analysis={analysis}
-                isSmartLoading={isAnalysisLookupLoading || isAnalysisLoading}
-                smartError={analysisError}
-                repositoryError={analysisRepositoryError}
-                hasMapping={hasAnalysisMapping}
-                canAnalyze={
-                  hasAnalysisMapping &&
-                  !analysisRepositoryError &&
-                  providerAvailability[analysisProvider].available &&
-                  !(isAnalysisLookupLoading || isAnalysisLoading)
-                }
                 provider={analysisProvider}
-                isOutdated={isAnalysisOutdated}
+                pullRequestHeadOid={pullRequest.headRefOid}
                 onAnalyze={(nextProvider) => {
                   void handleAnalyze(nextProvider);
                 }}

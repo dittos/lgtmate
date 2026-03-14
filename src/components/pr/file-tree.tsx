@@ -12,7 +12,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TruncatedText } from "@/components/ui/truncated-text";
-import type { AnalyzePullRequestResult, AnalyzerProvider } from "@/lib/analyzer";
+import {
+  useAnalysisController,
+  useAnalysisControllerSelector
+} from "@/lib/analysis-controller";
+import type { AnalyzerProvider } from "@/lib/analyzer";
 import type { GithubPullRequestFileNode } from "@/lib/github";
 import { cn } from "@/lib/utils";
 
@@ -283,40 +287,65 @@ function SmartModeEmptyState({
 }
 
 export function FileTree({
+  owner,
+  repo,
+  number,
   files,
   selectedPath,
   onSelect,
   onSelectDescription,
-  analysis,
-  isSmartLoading,
-  smartError,
-  repositoryError,
-  hasMapping,
-  canAnalyze,
   provider,
-  isOutdated,
+  pullRequestHeadOid,
   onAnalyze
 }: {
+  owner: string;
+  repo: string;
+  number: number;
   files: GithubPullRequestFileNode[];
   selectedPath: string | null;
   onSelect(path: string): void;
   onSelectDescription(): void;
-  analysis: AnalyzePullRequestResult | null;
-  isSmartLoading: boolean;
-  smartError: string | null;
-  repositoryError: string | null;
-  hasMapping: boolean;
-  canAnalyze: boolean;
   provider: AnalyzerProvider;
-  isOutdated: boolean;
+  pullRequestHeadOid: string;
   onAnalyze: (provider: AnalyzerProvider) => void;
 }) {
   const [mode, setMode] = useState<TreeMode>("smart");
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [collapsedChildren, setCollapsedChildren] = useState<Record<string, boolean>>({});
+  const controller = useAnalysisController({ owner, repo, number, provider });
+  const analysis = useAnalysisControllerSelector(controller, (state) => state.analysis);
+  const repositoryError = useAnalysisControllerSelector(
+    controller,
+    (state) => state.repository.error
+  );
+  const hasMapping = useAnalysisControllerSelector(
+    controller,
+    (state) => state.repository.hasMapping
+  );
+  const providerAvailability = useAnalysisControllerSelector(
+    controller,
+    (state) => state.providers[provider]
+  );
+  const isLookupLoading = useAnalysisControllerSelector(
+    controller,
+    (state) => state.isLookupLoading
+  );
+  const isStarting = useAnalysisControllerSelector(controller, (state) => state.isStarting);
+  const jobStatus = useAnalysisControllerSelector(controller, (state) => state.job?.status);
+  const smartError = useAnalysisControllerSelector(controller, (state) =>
+    state.analysis ? null : state.error
+  );
   const filesByPath = new Map(files.map((file) => [file.path, file]));
   const smartAnalysis = analysis?.analysis ?? null;
   const hasSmartGroups = (smartAnalysis?.groups.length ?? 0) > 0;
+  const isSmartLoading =
+    isLookupLoading || isStarting || jobStatus === "queued" || jobStatus === "running";
+  const canAnalyze =
+    hasMapping &&
+    !repositoryError &&
+    providerAvailability.available &&
+    !isSmartLoading;
+  const isOutdated = Boolean(analysis && analysis.headOid !== pullRequestHeadOid);
   const blockedReason =
     repositoryError ?? (!hasMapping ? "A local repository mapping is required." : smartError);
 

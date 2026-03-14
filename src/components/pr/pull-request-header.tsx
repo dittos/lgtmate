@@ -1,9 +1,5 @@
 import { ExternalLink, GitBranch } from "lucide-react";
-import type {
-  AnalyzePullRequestResult,
-  AnalyzerProvider,
-  AnalyzerProviderAvailability
-} from "@/lib/analyzer";
+import type { AnalyzerProvider } from "@/lib/analyzer";
 import {
   getPullRequestState,
   type GithubPullRequest
@@ -13,27 +9,17 @@ import { StateBadge } from "./state-badge";
 
 export function PullRequestHeader({
   pullRequest,
+  owner,
+  repo,
+  number,
   provider,
-  providerAvailability,
-  repositoryError,
-  hasMapping,
-  analysis,
-  isOutdated,
-  isLoading,
-  progressMessage,
-  error,
   onAnalyze
 }: {
   pullRequest: GithubPullRequest;
+  owner: string;
+  repo: string;
+  number: number;
   provider: AnalyzerProvider;
-  providerAvailability: Record<AnalyzerProvider, AnalyzerProviderAvailability>;
-  repositoryError: string | null;
-  hasMapping: boolean;
-  analysis: AnalyzePullRequestResult | null;
-  isOutdated: boolean;
-  isLoading: boolean;
-  progressMessage: string | null;
-  error: string | null;
   onAnalyze: (provider: AnalyzerProvider) => void;
 }) {
   return (
@@ -68,15 +54,11 @@ export function PullRequestHeader({
           </div>
         </div>
         <PrAnalysisPanel
+          owner={owner}
+          repo={repo}
+          number={number}
           provider={provider}
-          providerAvailability={providerAvailability}
-          repositoryError={repositoryError}
-          hasMapping={hasMapping}
-          analysis={analysis}
-          isOutdated={isOutdated}
-          isLoading={isLoading}
-          progressMessage={progressMessage}
-          error={error}
+          pullRequestHeadOid={pullRequest.headRefOid}
           onAnalyze={onAnalyze}
         />
       </div>
