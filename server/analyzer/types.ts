@@ -100,7 +100,6 @@ export type AnalysisJobSnapshot = {
   model: string;
   headOid: string;
   baseOid: string | null;
-  dedupeKey: string;
   status: AnalysisJobStatus;
   createdAt: string;
   startedAt: string | null;
@@ -135,6 +134,10 @@ export type AnalysisJobStreamEvent =
     }
   | {
       type: "failed";
+      job: AnalysisJobSnapshot;
+    }
+  | {
+      type: "cancelled";
       job: AnalysisJobSnapshot;
     }
   | {

@@ -11,6 +11,20 @@ export function getRequiredSearchParam(req: IncomingMessage, key: string) {
   return value;
 }
 
+export async function readJsonBody(req: IncomingMessage) {
+  const chunks: Buffer[] = [];
+
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  if (chunks.length === 0) {
+    return {};
+  }
+
+  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+}
+
 export function sendJson(res: ServerResponse, body: unknown, statusCode = 200) {
   res.statusCode = statusCode;
   res.setHeader("Content-Type", "application/json");

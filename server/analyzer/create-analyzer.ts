@@ -32,7 +32,14 @@ export async function getAnalyzerProviderAvailability(): Promise<
   };
 }
 
-export function createAnalyzer(provider: AnalyzerProvider) {
+export async function createAnalyzer(provider: AnalyzerProvider) {
+  const availability = await getAnalyzerProviderAvailability();
+  const providerAvailability = availability[provider];
+
+  if (!providerAvailability.available) {
+    throw new Error(providerAvailability.reason ?? "The analyzer provider is not available.");
+  }
+
   if (provider === "codex") {
     return new CodexPullRequestAnalyzer();
   }

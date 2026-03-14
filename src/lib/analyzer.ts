@@ -52,7 +52,6 @@ export type AnalysisJobSnapshot = {
   model: string;
   headOid: string;
   baseOid: string | null;
-  dedupeKey: string;
   status: AnalysisJobStatus;
   createdAt: string;
   startedAt: string | null;
@@ -79,7 +78,6 @@ export type PullRequestAnalysisLookupResponse = {
 export type PullRequestAnalysisRunResponse = {
   ok: true;
   job: AnalysisJobSnapshot;
-  reusedExistingJob: boolean;
 };
 
 export type PullRequestAnalysisJobResponse = {

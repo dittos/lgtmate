@@ -18,7 +18,6 @@ type CreateAnalysisJobInput = {
   model: string;
   headOid: string;
   baseOid: string | null;
-  dedupeKey: string;
 };
 
 const MAX_TERMINAL_JOBS = 100;
@@ -30,12 +29,27 @@ function toSnapshot(job: AnalysisJobRecord): AnalysisJobSnapshot {
 
 class AnalysisJobStore {
   private readonly jobs = new Map<string, AnalysisJobRecord>();
-  private readonly activeJobIdsByDedupeKey = new Map<string, string>();
+  private readonly activeJobIdsByPullRequest = new Map<string, string>();
   private readonly subscribers = new Map<string, Set<JobSubscriber>>();
   private readonly terminalJobIds: string[] = [];
 
+  private getPullRequestKey(input: {
+    owner: string;
+    repo: string;
+    number: number;
+  }) {
+    return `${input.owner}/${input.repo}#${input.number}`;
+  }
+
   createJob(input: CreateAnalysisJobInput) {
     const now = new Date().toISOString();
+    const pullRequestKey = this.getPullRequestKey(input);
+    const activeJobId = this.activeJobIdsByPullRequest.get(pullRequestKey);
+
+    if (activeJobId) {
+      this.cancelJob(activeJobId, "Superseded by a newer analysis run");
+    }
+
     const job: AnalysisJobRecord = {
       id: randomUUID(),
       owner: input.owner,
@@ -45,7 +59,6 @@ class AnalysisJobStore {
       model: input.model,
       headOid: input.headOid,
       baseOid: input.baseOid,
-      dedupeKey: input.dedupeKey,
       status: "queued",
       createdAt: now,
       startedAt: null,
@@ -59,7 +72,7 @@ class AnalysisJobStore {
     };
 
     this.jobs.set(job.id, job);
-    this.activeJobIdsByDedupeKey.set(job.dedupeKey, job.id);
+    this.activeJobIdsByPullRequest.set(pullRequestKey, job.id);
     return toSnapshot(job);
   }
 
@@ -72,8 +85,8 @@ class AnalysisJobStore {
     return this.jobs.get(jobId)?.result ?? null;
   }
 
-  findActiveJobByDedupeKey(dedupeKey: string) {
-    const jobId = this.activeJobIdsByDedupeKey.get(dedupeKey);
+  findActiveJob(input: { owner: string; repo: string; number: number }) {
+    const jobId = this.activeJobIdsByPullRequest.get(this.getPullRequestKey(input));
 
     if (!jobId) {
       return null;
@@ -89,22 +102,16 @@ class AnalysisJobStore {
     provider?: AnalyzerProvider;
     headOid: string | null;
   }) {
+    const active = this.findActiveJob(input);
+
+    if (active) {
+      return active;
+    }
+
     let best: AnalysisJobRecord | null = null;
 
     for (const job of this.jobs.values()) {
-      if (
-        job.owner !== input.owner ||
-        job.repo !== input.repo ||
-        job.number !== input.number
-      ) {
-        continue;
-      }
-
-      if (input.provider && job.provider !== input.provider) {
-        continue;
-      }
-
-      if (input.headOid && job.headOid !== input.headOid) {
+      if (job.owner !== input.owner || job.repo !== input.repo || job.number !== input.number) {
         continue;
       }
 
@@ -173,6 +180,10 @@ class AnalysisJobStore {
 
   completeJob(jobId: string, input: { resultPath: string; result: StoredPullRequestAnalysis }) {
     return this.updateJob(jobId, (job) => {
+      if (job.status !== "queued" && job.status !== "running") {
+        return null;
+      }
+
       const now = new Date().toISOString();
       job.status = "completed";
       job.completedAt = now;
@@ -181,7 +192,7 @@ class AnalysisJobStore {
       job.resultPath = input.resultPath;
       job.result = input.result;
       job.error = null;
-      this.activeJobIdsByDedupeKey.delete(job.dedupeKey);
+      this.clearActiveJob(job);
       this.trackTerminalJob(job.id);
 
       return {
@@ -194,17 +205,43 @@ class AnalysisJobStore {
 
   failJob(jobId: string, error: string) {
     return this.updateJob(jobId, (job) => {
+      if (job.status !== "queued" && job.status !== "running") {
+        return null;
+      }
+
       const now = new Date().toISOString();
       job.status = "failed";
       job.completedAt = now;
       job.updatedAt = now;
       job.error = error;
       job.progressMessage ??= error;
-      this.activeJobIdsByDedupeKey.delete(job.dedupeKey);
+      this.clearActiveJob(job);
       this.trackTerminalJob(job.id);
 
       return {
         type: "failed",
+        job: toSnapshot(job)
+      } satisfies AnalysisJobStreamEvent;
+    });
+  }
+
+  cancelJob(jobId: string, reason = "Cancelled") {
+    return this.updateJob(jobId, (job) => {
+      if (job.status !== "queued" && job.status !== "running") {
+        return null;
+      }
+
+      const now = new Date().toISOString();
+      job.status = "cancelled";
+      job.completedAt = now;
+      job.updatedAt = now;
+      job.error = reason;
+      job.progressMessage = reason;
+      this.clearActiveJob(job);
+      this.trackTerminalJob(job.id);
+
+      return {
+        type: "cancelled",
         job: toSnapshot(job)
       } satisfies AnalysisJobStreamEvent;
     });
@@ -258,6 +295,15 @@ class AnalysisJobStore {
 
     for (const listener of listeners) {
       listener(event);
+    }
+  }
+
+  private clearActiveJob(job: Pick<AnalysisJobRecord, "id" | "owner" | "repo" | "number">) {
+    const pullRequestKey = this.getPullRequestKey(job);
+    const activeJobId = this.activeJobIdsByPullRequest.get(pullRequestKey);
+
+    if (activeJobId === job.id) {
+      this.activeJobIdsByPullRequest.delete(pullRequestKey);
     }
   }
 
