@@ -41,7 +41,9 @@ export async function resolveRepositoryMapping(owner: string, repo: string) {
       "remote",
       "get-url",
       "origin"
-    ]);
+    ], {
+      captureStdout: true
+    });
     const normalizedRemote = normalizeGithubRemote(stdout);
 
     if (normalizedRemote !== repositoryKey) {

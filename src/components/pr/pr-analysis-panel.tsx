@@ -32,6 +32,41 @@ function formatCompletedAt(value: string) {
   }
 }
 
+function truncateStatusMessage(value: string, maxLength = 140) {
+  const compact = value.replace(/\s+/g, " ").trim();
+
+  if (compact.length <= maxLength) {
+    return {
+      text: compact,
+      truncated: false
+    };
+  }
+
+  return {
+    text: `${compact.slice(0, maxLength - 3)}...`,
+    truncated: true
+  };
+}
+
+function renderStatusMessage(value: string) {
+  const { text, truncated } = truncateStatusMessage(value);
+
+  if (!truncated) {
+    return text;
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger render={<span className="truncate">{text}</span>} />
+        <TooltipContent className="max-w-md whitespace-normal break-words">
+          {value}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 export function PrAnalysisPanel({
   owner,
   repo,
@@ -150,16 +185,16 @@ export function PrAnalysisPanel({
     );
   } else if (repositoryError) {
     statusTone = "text-destructive";
-    statusContent = repositoryError;
+    statusContent = renderStatusMessage(repositoryError);
   } else if (!providerState.available && !isDemoProviderReason(providerState.reason)) {
     statusTone = "text-destructive";
-    statusContent = providerState.reason;
+    statusContent = renderStatusMessage(providerState.reason ?? "Provider unavailable");
   } else if (error) {
     statusTone = "text-destructive";
-    statusContent = error;
+    statusContent = renderStatusMessage(error);
   } else if (warning) {
     statusTone = "text-amber-700 dark:text-amber-300";
-    statusContent = warning;
+    statusContent = renderStatusMessage(warning);
   } else if (ANALYSIS_SOURCE_MODE !== "bundled") {
     statusContent = "Run analysis to start the review.";
   }
