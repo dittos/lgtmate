@@ -38,7 +38,6 @@ type AnalysisControllerKey = {
   owner: string;
   repo: string;
   number: number;
-  provider: AnalyzerProvider;
 };
 
 const DEFAULT_PROVIDERS: Record<AnalyzerProvider, AnalyzerProviderAvailability> = {
@@ -55,7 +54,7 @@ const DEFAULT_REPOSITORY: AnalysisRepositoryState = {
 const ANALYSIS_SOURCE_MODE = getAnalysisSourceMode();
 
 function buildControllerKey(input: AnalysisControllerKey) {
-  return `${input.owner}/${input.repo}#${input.number}:${input.provider}`;
+  return `${input.owner}/${input.repo}#${input.number}`;
 }
 
 class AnalysisController {
@@ -79,8 +78,7 @@ class AnalysisController {
   constructor(
     private readonly owner: string,
     private readonly repo: string,
-    private readonly number: number,
-    private readonly provider: AnalyzerProvider
+    private readonly number: number
   ) {}
 
   getSnapshot = () => this.state;
@@ -104,12 +102,7 @@ class AnalysisController {
 
     try {
       if (ANALYSIS_SOURCE_MODE === "bundled") {
-        const analysis = await loadBundledAnalysis(
-          this.owner,
-          this.repo,
-          this.number,
-          this.provider
-        );
+        const analysis = await loadBundledAnalysis(this.owner, this.repo, this.number);
 
         if (requestId !== this.loadRequestId) {
           return;
@@ -129,12 +122,7 @@ class AnalysisController {
         return;
       }
 
-      const response = await getPullRequestAnalysis(
-        this.owner,
-        this.repo,
-        this.number,
-        this.provider
-      );
+      const response = await getPullRequestAnalysis(this.owner, this.repo, this.number);
 
       if (requestId !== this.loadRequestId) {
         return;
@@ -155,12 +143,7 @@ class AnalysisController {
       this.ensureJobSubscription(response.job);
     } catch (error) {
       if (ANALYSIS_SOURCE_MODE === "auto") {
-        const analysis = await loadBundledAnalysis(
-          this.owner,
-          this.repo,
-          this.number,
-          this.provider
-        );
+        const analysis = await loadBundledAnalysis(this.owner, this.repo, this.number);
 
         if (requestId !== this.loadRequestId) {
           return;
@@ -198,7 +181,10 @@ class AnalysisController {
     }
   }
 
-  async analyze(options: { forceRefresh?: boolean } = {}) {
+  async analyze(
+    provider: AnalyzerProvider,
+    options: { forceRefresh?: boolean } = {}
+  ) {
     if (ANALYSIS_SOURCE_MODE === "bundled") {
       this.setState((current) => ({
         ...current,
@@ -217,7 +203,7 @@ class AnalysisController {
 
     try {
       const response = await analyzePullRequest(this.owner, this.repo, this.number, {
-        provider: this.provider,
+        provider,
         forceRefresh: options.forceRefresh ?? true
       });
 
@@ -394,18 +380,14 @@ export function getAnalysisController(input: AnalysisControllerKey) {
   const controller = new AnalysisController(
     input.owner,
     input.repo,
-    input.number,
-    input.provider
+    input.number
   );
   controllers.set(key, controller);
   return controller;
 }
 
 export function useAnalysisController(input: AnalysisControllerKey) {
-  return useMemo(
-    () => getAnalysisController(input),
-    [input.owner, input.repo, input.number, input.provider]
-  );
+  return useMemo(() => getAnalysisController(input), [input.owner, input.repo, input.number]);
 }
 
 export function useAnalysisControllerSelector<T>(

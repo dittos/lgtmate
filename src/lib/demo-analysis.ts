@@ -61,10 +61,9 @@ export const BUNDLED_ANALYSIS_REPOSITORY_STATE = {
 export async function loadBundledAnalysis(
   owner: string,
   repo: string,
-  number: number,
-  provider: AnalyzerProvider
+  number: number
 ) {
-  const modulePath = `../demo/analyses/${owner}/${repo}/${number}/${provider}.json`;
+  const modulePath = `../demo/analyses/${owner}/${repo}/${number}/analysis.json`;
   const loader = bundledAnalysisModules[modulePath];
 
   if (!loader) {

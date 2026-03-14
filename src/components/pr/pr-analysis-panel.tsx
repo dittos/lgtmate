@@ -84,7 +84,7 @@ export function PrAnalysisPanel({
 }) {
   const [isProviderMenuOpen, setIsProviderMenuOpen] = useState(false);
   const providerMenuRef = useRef<HTMLDivElement | null>(null);
-  const controller = useAnalysisController({ owner, repo, number, provider });
+  const controller = useAnalysisController({ owner, repo, number });
   const providerAvailability = useAnalysisControllerSelector(
     controller,
     (state) => state.providers
@@ -97,8 +97,12 @@ export function PrAnalysisPanel({
     controller,
     (state) => state.repository.hasMapping
   );
-  const analysis = useAnalysisControllerSelector(controller, (state) => state.analysis);
-  const job = useAnalysisControllerSelector(controller, (state) => state.job);
+  const selectedAnalysis = useAnalysisControllerSelector(controller, (state) =>
+    state.analysis?.provider === provider ? state.analysis : null
+  );
+  const selectedJob = useAnalysisControllerSelector(controller, (state) =>
+    state.job?.provider === provider ? state.job : null
+  );
   const isLookupLoading = useAnalysisControllerSelector(
     controller,
     (state) => state.isLookupLoading
@@ -110,11 +114,15 @@ export function PrAnalysisPanel({
   );
   const error = useAnalysisControllerSelector(controller, (state) => state.error);
   const providerState = providerAvailability[provider];
-  const isOutdated = Boolean(analysis && analysis.headOid !== pullRequestHeadOid);
-  const isJobActive = job?.status === "queued" || job?.status === "running";
+  const isOutdated = Boolean(
+    selectedAnalysis && selectedAnalysis.headOid !== pullRequestHeadOid
+  );
+  const isJobActive =
+    selectedJob?.status === "queued" || selectedJob?.status === "running";
   const isLoading = isLookupLoading || isStarting || isJobActive;
-  const progressMessage = job?.progressMessage ?? null;
-  const warning = analysis && job?.status === "failed" ? job.error : null;
+  const progressMessage = selectedJob?.progressMessage ?? null;
+  const warning =
+    selectedAnalysis && selectedJob?.status === "failed" ? selectedJob.error : null;
   const canAnalyze =
     hasMapping && !repositoryError && providerState.available && !isLoading;
   const alternateProvider: AnalyzerProvider = provider === "codex" ? "claude" : "codex";
@@ -163,17 +171,17 @@ export function PrAnalysisPanel({
         <span className="truncate">
           {progressMessage ?? "Analyzing pull request in an isolated worktree..."}
         </span>
-        {!isStreamConnected && job ? (
+        {!isStreamConnected && selectedJob ? (
           <span className="text-xs text-muted-foreground/80">Reconnecting...</span>
         ) : null}
       </span>
     );
-  } else if (analysis) {
+  } else if (selectedAnalysis) {
     statusContent = (
       <>
         <span>
-          Analyzed with {analysis.provider}/{analysis.model} at{" "}
-          {formatCompletedAt(analysis.completedAt)}
+          Analyzed with {selectedAnalysis.provider}/{selectedAnalysis.model} at{" "}
+          {formatCompletedAt(selectedAnalysis.completedAt)}
         </span>
         {isOutdated ? (
           <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300">
@@ -215,7 +223,7 @@ export function PrAnalysisPanel({
                     className="rounded-r-none"
                   >
                     <Sparkles className="size-3.5" />
-                    {analysis ? "Re-analyze" : "Analyze"} with {getProviderLabel(provider)}
+                    {selectedAnalysis ? "Re-analyze" : "Analyze"} with {getProviderLabel(provider)}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{analyzeDisabledReason}</TooltipContent>
@@ -230,7 +238,7 @@ export function PrAnalysisPanel({
               className="rounded-r-none"
             >
               <Sparkles className="size-3.5" />
-              {analysis ? "Re-analyze" : "Analyze"} with {getProviderLabel(provider)}
+              {selectedAnalysis ? "Re-analyze" : "Analyze"} with {getProviderLabel(provider)}
             </Button>
           )}
           <Button
@@ -268,7 +276,7 @@ export function PrAnalysisPanel({
                 }
               >
                 <span>
-                  {analysis ? "Re-analyze" : "Analyze"} with{" "}
+                  {selectedAnalysis ? "Re-analyze" : "Analyze"} with{" "}
                   {getProviderLabel(alternateProvider)}
                 </span>
                 {!alternateProviderState.available &&

@@ -86,7 +86,7 @@ class AnalysisJobStore {
     owner: string;
     repo: string;
     number: number;
-    provider: AnalyzerProvider;
+    provider?: AnalyzerProvider;
     headOid: string | null;
   }) {
     let best: AnalysisJobRecord | null = null;
@@ -95,9 +95,12 @@ class AnalysisJobStore {
       if (
         job.owner !== input.owner ||
         job.repo !== input.repo ||
-        job.number !== input.number ||
-        job.provider !== input.provider
+        job.number !== input.number
       ) {
+        continue;
+      }
+
+      if (input.provider && job.provider !== input.provider) {
         continue;
       }
 

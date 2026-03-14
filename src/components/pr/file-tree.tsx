@@ -344,8 +344,10 @@ export function FileTree({
   const [mode, setMode] = useState<TreeMode>("smart");
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [collapsedChildren, setCollapsedChildren] = useState<Record<string, boolean>>({});
-  const controller = useAnalysisController({ owner, repo, number, provider });
-  const analysis = useAnalysisControllerSelector(controller, (state) => state.analysis);
+  const controller = useAnalysisController({ owner, repo, number });
+  const analysis = useAnalysisControllerSelector(controller, (state) =>
+    state.analysis?.provider === provider ? state.analysis : null
+  );
   const repositoryError = useAnalysisControllerSelector(
     controller,
     (state) => state.repository.error
@@ -363,7 +365,9 @@ export function FileTree({
     (state) => state.isLookupLoading
   );
   const isStarting = useAnalysisControllerSelector(controller, (state) => state.isStarting);
-  const jobStatus = useAnalysisControllerSelector(controller, (state) => state.job?.status);
+  const jobStatus = useAnalysisControllerSelector(controller, (state) =>
+    state.job?.provider === provider ? state.job.status : null
+  );
   const smartError = useAnalysisControllerSelector(controller, (state) =>
     state.analysis ? null : state.error
   );

@@ -11,7 +11,11 @@ import { FileTree } from "@/components/pr/file-tree";
 import { PullRequestDescription } from "@/components/pr/pull-request-description";
 import { PullRequestHeader } from "@/components/pr/pull-request-header";
 import { type AnalyzerProvider } from "@/lib/analyzer";
-import { getAnalysisController, useAnalysisController } from "@/lib/analysis-controller";
+import {
+  getAnalysisController,
+  useAnalysisController,
+  useAnalysisControllerSelector
+} from "@/lib/analysis-controller";
 import {
   buildPullRequestFilePatch,
   getPullRequest,
@@ -23,11 +27,12 @@ import {
 } from "@/lib/github";
 
 const FILE_TREE_WIDTH_STORAGE_KEY = "lgtmate-file-tree-width";
-const ANALYSIS_PROVIDER_STORAGE_KEY = "lgtmate-analysis-provider";
+const LAST_ANALYSIS_PROVIDER_STORAGE_KEY = "lgtmate-last-analysis-provider";
 const DEFAULT_FILE_TREE_WIDTH = 352;
 const MIN_FILE_TREE_WIDTH = 240;
 const MIN_CONTENT_WIDTH = 480;
 const RESIZE_HANDLE_WIDTH = 12;
+const ANALYZER_PROVIDERS: AnalyzerProvider[] = ["codex", "claude"];
 
 function clampFileTreeWidth(width: number, containerWidth: number) {
   const maxWidth = Math.max(
@@ -50,14 +55,63 @@ function getStoredFileTreeWidth() {
     : DEFAULT_FILE_TREE_WIDTH;
 }
 
-function getStoredAnalysisProvider(): AnalyzerProvider {
-  if (typeof window === "undefined") {
-    return "codex";
+function getAvailableAnalysisProvider(
+  providers: Record<
+    AnalyzerProvider,
+    {
+      available: boolean;
+    }
+  >,
+  preferredProvider?: AnalyzerProvider | null
+) {
+  if (preferredProvider && providers[preferredProvider].available) {
+    return preferredProvider;
   }
 
-  return window.localStorage.getItem(ANALYSIS_PROVIDER_STORAGE_KEY) === "claude"
-    ? "claude"
-    : "codex";
+  return (
+    ANALYZER_PROVIDERS.find((provider) => providers[provider].available) ?? "codex"
+  );
+}
+
+function getStoredLastAnalysisProvider(): AnalyzerProvider | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const storedProvider = window.localStorage.getItem(
+    LAST_ANALYSIS_PROVIDER_STORAGE_KEY
+  );
+
+  return storedProvider === "codex" || storedProvider === "claude"
+    ? storedProvider
+    : null;
+}
+
+function getCurrentAnalysisProvider(input: {
+  providers: Record<
+    AnalyzerProvider,
+    {
+      available: boolean;
+    }
+  >;
+  analysisProvider: AnalyzerProvider | null;
+  lastUsedProvider: AnalyzerProvider | null;
+  job:
+    | {
+        provider: AnalyzerProvider;
+        status: string;
+      }
+    | null;
+}) {
+  if (input.job && (input.job.status === "queued" || input.job.status === "running")) {
+    return input.job.provider;
+  }
+
+  if (input.analysisProvider) {
+    return input.analysisProvider;
+  }
+
+  return getAvailableAnalysisProvider(input.providers, input.lastUsedProvider);
 }
 
 export function PullRequestPage() {
@@ -73,9 +127,6 @@ export function PullRequestPage() {
   const [selectedFile, setSelectedFile] = useState<GithubPullRequestRestFile | null>(
     null
   );
-  const [analysisProvider, setAnalysisProvider] = useState<AnalyzerProvider>(() =>
-    getStoredAnalysisProvider()
-  );
   const [isPullRequestLoading, setIsPullRequestLoading] = useState(true);
   const [isFilesLoading, setIsFilesLoading] = useState(true);
   const [isDiffLoading, setIsDiffLoading] = useState(false);
@@ -83,13 +134,29 @@ export function PullRequestPage() {
   const [filesError, setFilesError] = useState<string | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
   const [fileTreeWidth, setFileTreeWidth] = useState(() => getStoredFileTreeWidth());
+  const [lastUsedAnalysisProvider, setLastUsedAnalysisProvider] =
+    useState<AnalyzerProvider | null>(() => getStoredLastAnalysisProvider());
   const [isResizing, setIsResizing] = useState(false);
   const splitContainerRef = useRef<HTMLDivElement | null>(null);
   const analysisController = useAnalysisController({
     owner,
     repo,
-    number,
-    provider: analysisProvider
+    number
+  });
+  const analysisProviders = useAnalysisControllerSelector(
+    analysisController,
+    (state) => state.providers
+  );
+  const analysis = useAnalysisControllerSelector(
+    analysisController,
+    (state) => state.analysis
+  );
+  const analysisJob = useAnalysisControllerSelector(analysisController, (state) => state.job);
+  const analysisProvider = getCurrentAnalysisProvider({
+    providers: analysisProviders,
+    analysisProvider: analysis?.provider ?? null,
+    lastUsedProvider: lastUsedAnalysisProvider,
+    job: analysisJob
   });
 
   useEffect(() => {
@@ -187,8 +254,15 @@ export function PullRequestPage() {
   }, [fileTreeWidth]);
 
   useEffect(() => {
-    window.localStorage.setItem(ANALYSIS_PROVIDER_STORAGE_KEY, analysisProvider);
-  }, [analysisProvider]);
+    if (!lastUsedAnalysisProvider) {
+      return;
+    }
+
+    window.localStorage.setItem(
+      LAST_ANALYSIS_PROVIDER_STORAGE_KEY,
+      lastUsedAnalysisProvider
+    );
+  }, [lastUsedAnalysisProvider]);
 
   useEffect(() => {
     const container = splitContainerRef.current;
@@ -248,14 +322,13 @@ export function PullRequestPage() {
   }
 
   async function handleAnalyze(nextProvider: AnalyzerProvider = analysisProvider) {
-    setAnalysisProvider(nextProvider);
+    setLastUsedAnalysisProvider(nextProvider);
     const targetController = getAnalysisController({
       owner,
       repo,
-      number,
-      provider: nextProvider
+      number
     });
-    await targetController.analyze({ forceRefresh: true });
+    await targetController.analyze(nextProvider, { forceRefresh: true });
   }
 
   function handleResizeStart(event: ReactPointerEvent<HTMLDivElement>) {

@@ -326,14 +326,10 @@ async function handlePullRequestLookup(
     url: URL;
   }
 ) {
-  const provider = isAnalyzerProvider(input.url.searchParams.get("provider"))
-    ? (input.url.searchParams.get("provider") as AnalyzerProvider)
-    : "codex";
-
   const [mapping, providers, analysis, pullRequest] = await Promise.all([
     resolveRepositoryMapping(input.owner, input.repo),
     getAnalyzerProviderAvailability(),
-    readStoredAnalysis(input.owner, input.repo, input.number, provider),
+    readStoredAnalysis(input.owner, input.repo, input.number),
     fetchPullRequestAnalysisContext(input.owner, input.repo, input.number).catch(() => null)
   ]);
 
@@ -341,7 +337,6 @@ async function handlePullRequestLookup(
     owner: input.owner,
     repo: input.repo,
     number: input.number,
-    provider,
     headOid: pullRequest?.headRefOid ?? analysis?.headOid ?? null
   });
 

@@ -123,20 +123,11 @@ export type AnalysisJobStreamEvent =
   | AnalysisJobFailedEvent
   | AnalysisJobHeartbeatEvent;
 
-function buildPullRequestAnalyzerUrl(
-  owner: string,
-  repo: string,
-  number: number,
-  provider?: AnalyzerProvider
-) {
+function buildPullRequestAnalyzerUrl(owner: string, repo: string, number: number) {
   const url = new URL(
     `/api/analyzer/pull-requests/${owner}/${repo}/${number}`,
     window.location.origin
   );
-
-  if (provider) {
-    url.searchParams.set("provider", provider);
-  }
 
   return `${url.pathname}${url.search}`;
 }
@@ -149,11 +140,10 @@ function buildAnalysisJobUrl(jobId: string, stream = false) {
 export async function getPullRequestAnalysis(
   owner: string,
   repo: string,
-  number: number,
-  provider: AnalyzerProvider
+  number: number
 ) {
   return fetchJson<PullRequestAnalysisLookupResponse>(
-    buildPullRequestAnalyzerUrl(owner, repo, number, provider)
+    buildPullRequestAnalyzerUrl(owner, repo, number)
   );
 }
 
