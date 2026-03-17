@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
+import chalk from "chalk";
+import ora from "ora";
+import prompts from "prompts";
 import { spawn } from "node:child_process";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 
 const DEFAULT_PROVIDER = "codex";
@@ -14,18 +16,146 @@ const DEFAULT_PORT = 1973;
 const SERVER_START_TIMEOUT_MS = 20000;
 const HEALTH_POLL_INTERVAL_MS = 250;
 const ANALYSIS_POLL_INTERVAL_MS = 1000;
+const INTERACTIVE_OUTPUT = Boolean(process.stdout.isTTY);
+const INTERACTIVE_PROMPTS = Boolean(process.stdin.isTTY && process.stdout.isTTY);
 
 const VALID_PROVIDERS = new Set(["codex", "claude"]);
 
+let activeSpinner = null;
+
+function formatPrefix(label, color = chalk.blueBright) {
+  return color(`[${label}]`);
+}
+
+function logInfo(message) {
+  console.log(`${formatPrefix("lgtm")} ${message}`);
+}
+
+function logSuccess(message) {
+  console.log(`${formatPrefix("done", chalk.green)} ${message}`);
+}
+
+function logWarn(message) {
+  console.warn(`${formatPrefix("warn", chalk.yellow)} ${message}`);
+}
+
+function logError(message) {
+  console.error(`${formatPrefix("error", chalk.red)} ${message}`);
+}
+
+function printKeyValue(label, value) {
+  console.log(`${chalk.bold(`${label}:`)} ${value}`);
+}
+
+function printSpacer() {
+  console.log("");
+}
+
+function formatEnterToOpenHint() {
+  return chalk.dim("Press Enter to open in the browser before analysis completes.");
+}
+
+function formatWaitingForAnalysisText(prNumber, progress = null) {
+  const base = progress
+    ? `Waiting for analysis on PR #${prNumber} - ${progress}`
+    : `Waiting for analysis on PR #${prNumber}`;
+
+  if (!INTERACTIVE_PROMPTS) {
+    return base;
+  }
+
+  return `${base}\n${formatEnterToOpenHint()}`;
+}
+
+function createStatusReporter(text) {
+  if (INTERACTIVE_OUTPUT) {
+    const spinner = ora({
+      text,
+      discardStdin: false
+    }).start();
+    activeSpinner = spinner;
+
+    return {
+      update(nextText) {
+        spinner.text = nextText;
+      },
+      succeed(message = spinner.text) {
+        spinner.succeed(message);
+        if (activeSpinner === spinner) {
+          activeSpinner = null;
+        }
+      },
+      warn(message = spinner.text) {
+        spinner.warn(message);
+        if (activeSpinner === spinner) {
+          activeSpinner = null;
+        }
+      },
+      fail(message = spinner.text) {
+        spinner.fail(message);
+        if (activeSpinner === spinner) {
+          activeSpinner = null;
+        }
+      },
+      stop() {
+        spinner.stop();
+        if (activeSpinner === spinner) {
+          activeSpinner = null;
+        }
+      }
+    };
+  }
+
+  let currentText = text;
+  let didPrintStart = false;
+
+  const printStart = () => {
+    if (!didPrintStart) {
+      logInfo(currentText);
+      didPrintStart = true;
+    }
+  };
+
+  return {
+    update(nextText) {
+      if (nextText !== currentText) {
+        currentText = nextText;
+        logInfo(currentText);
+        didPrintStart = true;
+      }
+    },
+    succeed(message = currentText) {
+      printStart();
+      logSuccess(message);
+    },
+    warn(message = currentText) {
+      printStart();
+      logWarn(message);
+    },
+    fail(message = currentText) {
+      printStart();
+      logError(message);
+    },
+    stop() {}
+  };
+}
+
 function printUsage() {
   console.error(
-    "Usage: lgtm [owner/]repo <pr-number> [--provider codex|claude] [--port <number>] [--no-open]"
+    `${chalk.bold("Usage:")} lgtm [owner/]repo <pr-number> [--provider codex|claude] [--port <number>] [--no-open]`
   );
-  console.error("       lgtm <pr-number> [--provider codex|claude] [--port <number>] [--no-open]");
+  console.error(
+    "       lgtm <pr-number> [--provider codex|claude] [--port <number>] [--no-open]"
+  );
 }
 
 function fail(message) {
-  console.error(`lgtm: ${message}`);
+  if (activeSpinner) {
+    activeSpinner.stop();
+    activeSpinner = null;
+  }
+
+  logError(message);
   process.exit(1);
 }
 
@@ -443,11 +573,11 @@ async function ensureServerInstance(preferredPort) {
   if (existing && Number.isInteger(existing.pid) && Number.isInteger(existing.port)) {
     if (isProcessAlive(existing.pid)) {
       if (await isHealthcheckReady(existing.port)) {
-        return existing;
+        return { ...existing, reused: true };
       }
 
       if (await waitForHealthcheck(existing.port, 5000)) {
-        return existing;
+        return { ...existing, reused: true };
       }
     }
 
@@ -492,7 +622,7 @@ async function ensureServerInstance(preferredPort) {
     fail(`Timed out waiting for the local server on port ${port}.`);
   }
 
-  return instance;
+  return { ...instance, reused: false };
 }
 
 async function triggerAnalysis({ owner, repo, prNumber, provider, port }) {
@@ -532,10 +662,31 @@ async function lookupPullRequestAnalysis({ owner, repo, prNumber, port }) {
   return payload;
 }
 
-async function waitForAnalysisCompletion({ owner, repo, prNumber, port, initialState, shouldStop }) {
+function formatAnalysisProgress(job) {
+  const parts = [];
+
+  if (job?.status) {
+    parts.push(`status: ${job.status}`);
+  }
+
+  if (job?.progressMessage) {
+    parts.push(job.progressMessage);
+  }
+
+  return parts.join(" - ");
+}
+
+async function waitForAnalysisCompletion({
+  owner,
+  repo,
+  prNumber,
+  port,
+  initialState,
+  shouldStop,
+  onUpdate
+}) {
   let latestState = initialState;
-  let lastJobStatus = null;
-  let lastProgressMessage = null;
+  let lastStatusLine = null;
 
   while (true) {
     if (shouldStop?.()) {
@@ -549,18 +700,11 @@ async function waitForAnalysisCompletion({ owner, repo, prNumber, port, initialS
     const currentJob = latestState.job;
 
     if (currentJob) {
-      if (currentJob.status !== lastJobStatus) {
-        console.log(`Analysis status: ${currentJob.status}`);
-        lastJobStatus = currentJob.status;
-      }
+      const currentStatusLine = formatAnalysisProgress(currentJob);
 
-      if (
-        typeof currentJob.progressMessage === "string" &&
-        currentJob.progressMessage &&
-        currentJob.progressMessage !== lastProgressMessage
-      ) {
-        console.log(`Analysis progress: ${currentJob.progressMessage}`);
-        lastProgressMessage = currentJob.progressMessage;
+      if (currentStatusLine && currentStatusLine !== lastStatusLine) {
+        lastStatusLine = currentStatusLine;
+        onUpdate?.(currentJob);
       }
 
       if (currentJob.status === "failed" || currentJob.status === "cancelled") {
@@ -586,8 +730,6 @@ function waitForEnterToOpen(url) {
     };
   }
 
-  console.log("Press Enter to open in the browser before analysis completes.");
-
   let settled = false;
   let handleData = null;
 
@@ -595,6 +737,7 @@ function waitForEnterToOpen(url) {
     if (handleData) {
       process.stdin.off("data", handleData);
     }
+
     process.stdin.pause();
   };
 
@@ -608,7 +751,7 @@ function waitForEnterToOpen(url) {
 
       cleanup();
       settled = true;
-      console.log("Opening browser before analysis completes.");
+      logInfo("Opening browser before analysis completes.");
       resolve(await openUrl(url));
     };
 
@@ -619,11 +762,9 @@ function waitForEnterToOpen(url) {
   return {
     promise,
     cleanup() {
-      if (settled) {
-        return;
+      if (!settled) {
+        cleanup();
       }
-
-      cleanup();
     }
   };
 }
@@ -638,38 +779,34 @@ async function isExecutableAvailable(command) {
 }
 
 async function chooseProviderInteractively(providers) {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+  if (!INTERACTIVE_PROMPTS) {
     return null;
   }
 
-  const prompt = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
-  try {
-    while (true) {
-      const answer = (
-        await prompt.question("Choose default analyzer provider: [1] codex, [2] claude: ")
+  const response = await prompts(
+    {
+      type: "select",
+      name: "provider",
+      message: "Choose default analyzer provider",
+      choices: providers.map((provider) => ({
+        title: provider === DEFAULT_PROVIDER ? `${provider} (default)` : provider,
+        value: provider
+      })),
+      initial: Math.max(
+        providers.findIndex((provider) => provider === DEFAULT_PROVIDER),
+        0
       )
-        .trim()
-        .toLowerCase();
-
-      if (answer === "1" || answer === "codex") {
-        return "codex";
-      }
-
-      if (answer === "2" || answer === "claude") {
-        return "claude";
-      }
-
-      if (!answer && providers.includes(DEFAULT_PROVIDER)) {
-        return DEFAULT_PROVIDER;
-      }
+    },
+    {
+      onCancel: () => true
     }
-  } finally {
-    prompt.close();
+  );
+
+  if (typeof response.provider === "string") {
+    return response.provider;
   }
+
+  return null;
 }
 
 async function resolveProvider(requestedProvider) {
@@ -798,38 +935,48 @@ async function main() {
 
   await ensureStorageRoot();
 
-  const { repositoryPath, repository } = repositoryRef
+  const { repository } = repositoryRef
     ? await resolveMappedRepository(repositoryRef)
     : await (async () => {
-        const resolvedRepositoryPath = await getGitRepositoryRoot().catch((error) => {
+        const repositoryPath = await getGitRepositoryRoot().catch((error) => {
           fail(error instanceof Error ? error.message : "Current directory is not a git repository.");
         });
-        const resolvedRepository = await getGithubRepository(resolvedRepositoryPath);
+        const resolvedRepository = await getGithubRepository(repositoryPath);
 
         await registerRepositoryMapping(
           resolvedRepository.owner,
           resolvedRepository.repo,
-          resolvedRepositoryPath
+          repositoryPath
         );
 
         return {
-          repositoryPath: resolvedRepositoryPath,
+          repositoryPath,
           repository: resolvedRepository
         };
       })();
 
+  const serverStatus = createStatusReporter("Checking local lgtmate server");
   const server = await ensureServerInstance(port);
+  serverStatus.succeed(
+    server.reused
+      ? `Server ready on ${chalk.bold(`http://127.0.0.1:${server.port}`)}`
+      : `Server started on ${chalk.bold(`http://127.0.0.1:${server.port}`)}`
+  );
+
   const analysisLookup = await lookupPullRequestAnalysis({
     owner: repository.owner,
     repo: repository.repo,
     prNumber,
     port: server.port
   });
+
   let selectedProvider = null;
   let job = null;
 
   if (!analysisLookup.analysis) {
     selectedProvider = await resolveProvider(provider);
+
+    const analysisStartStatus = createStatusReporter(`Starting analysis with ${selectedProvider}`);
     job = await triggerAnalysis({
       owner: repository.owner,
       repo: repository.repo,
@@ -837,75 +984,117 @@ async function main() {
       provider: selectedProvider,
       port: server.port
     });
+    analysisStartStatus.succeed(
+      `Analysis started with ${chalk.bold(selectedProvider)}`
+    );
   }
 
   const url = `http://127.0.0.1:${server.port}/${repository.owner}/${repository.repo}/pull/${prNumber}`;
 
-  console.log(`Repository: ${repository.owner}/${repository.repo}`);
-  console.log(`Server: ${url}`);
+  printSpacer();
+  printKeyValue(
+    "Repository / PR",
+    `${chalk.bold(`${repository.owner}/${repository.repo}`)} ${chalk.dim("/")} ${chalk.bold(`#${prNumber}`)}`
+  );
+
   if (analysisLookup.analysis) {
-    console.log(
-      `Analysis: existing ${analysisLookup.analysis.provider} result from ${analysisLookup.analysis.completedAt}`
+    printKeyValue(
+      "Analysis",
+      `existing ${chalk.bold(analysisLookup.analysis.provider)} result from ${analysisLookup.analysis.completedAt}`
     );
   } else if (job && selectedProvider) {
-    console.log(`Provider: ${selectedProvider}`);
-    console.log(`Analysis job: ${job.id} (${job.status})`);
+    printKeyValue("Provider", chalk.bold(selectedProvider));
+    printKeyValue("Analysis Job", `${chalk.bold(job.id)} (${job.status})`);
+  }
+  printSpacer();
+
+  if (!openBrowser) {
+    return;
   }
 
-  if (openBrowser) {
-    let opened = false;
+  if (analysisLookup.analysis) {
+    const openReporter = createStatusReporter("Opening browser");
+    const opened = await openUrl(url);
 
-    if (analysisLookup.analysis) {
-      opened = await openUrl(url);
-    } else {
-      const enterToOpen = waitForEnterToOpen(url);
-      let stopWaitingForAnalysis = false;
-      const completion = waitForAnalysisCompletion({
-        owner: repository.owner,
-        repo: repository.repo,
-        prNumber,
-        port: server.port,
-        initialState: job ? { ...analysisLookup, job } : analysisLookup,
-        shouldStop: () => stopWaitingForAnalysis
-      });
+    if (opened) {
+      openReporter.succeed(`Opened ${chalk.underline(url)}`);
+      return;
+    }
 
-      const winner = await Promise.race([
-        enterToOpen.promise.then((manualOpened) => ({
-          type: "manual",
-          opened: manualOpened
-        })),
-        completion.then((finalState) => ({
-          type: "analysis",
-          finalState
-        }))
-      ]);
+    openReporter.fail("Could not open browser automatically");
+    logError(`could not open browser automatically. Open ${url}`);
+    return;
+  }
 
-      if (winner.type === "manual") {
-        stopWaitingForAnalysis = true;
-        opened = winner.opened;
-      } else {
-        enterToOpen.cleanup();
+  const enterToOpen = waitForEnterToOpen(url);
+  let stopWaitingForAnalysis = false;
 
-        if (winner.finalState.analysis) {
-          console.log("Analysis complete. Opening browser.");
-        } else if (winner.finalState.job?.status === "failed") {
-          console.error(`lgtm: analysis failed: ${winner.finalState.job.error ?? "Unknown error"}`);
-          console.log("Opening browser with the failed analysis state.");
-        } else if (winner.finalState.job?.status === "cancelled") {
-          console.error(
-            `lgtm: analysis cancelled: ${winner.finalState.job.error ?? "Cancelled"}`
-          );
-          console.log("Opening browser with the cancelled analysis state.");
+  const waitReporter = createStatusReporter(formatWaitingForAnalysisText(prNumber));
+  const winner = await Promise.race([
+    enterToOpen.promise.then((opened) => ({
+      type: "manual",
+      opened
+    })),
+    waitForAnalysisCompletion({
+      owner: repository.owner,
+      repo: repository.repo,
+      prNumber,
+      port: server.port,
+      initialState: { ...analysisLookup, job },
+      shouldStop: () => stopWaitingForAnalysis,
+      onUpdate: (currentJob) => {
+        const progress = formatAnalysisProgress(currentJob);
+
+        if (progress) {
+          waitReporter.update(formatWaitingForAnalysisText(prNumber, progress));
         }
-
-        opened = await openUrl(url);
       }
+    }).then((finalState) => ({
+      type: "analysis",
+      finalState
+    }))
+  ]);
+
+  if (winner.type === "manual") {
+    stopWaitingForAnalysis = true;
+    waitReporter.succeed("Browser opened before analysis completed");
+    const openReporter = createStatusReporter("Opening browser");
+
+    if (winner.opened) {
+      openReporter.succeed(`Opened ${chalk.underline(url)}`);
+      return;
     }
 
-    if (!opened) {
-      console.error(`lgtm: could not open browser automatically. Open ${url}`);
-    }
+    openReporter.fail("Could not open browser automatically");
+    logError(`could not open browser automatically. Open ${url}`);
+    return;
   }
+
+  enterToOpen.cleanup();
+
+  if (winner.finalState.analysis) {
+    waitReporter.succeed("Analysis complete");
+    logInfo("Opening browser after analysis completed.");
+  } else if (winner.finalState.job?.status === "failed") {
+    waitReporter.fail(`Analysis failed: ${winner.finalState.job.error ?? "Unknown error"}`);
+    logWarn("Opening browser with the failed analysis state.");
+  } else if (winner.finalState.job?.status === "cancelled") {
+    waitReporter.warn(`Analysis cancelled: ${winner.finalState.job.error ?? "Cancelled"}`);
+    logWarn("Opening browser with the cancelled analysis state.");
+  } else {
+    waitReporter.stop();
+  }
+
+  const openReporter = createStatusReporter("Opening browser");
+  const opened = await openUrl(url);
+
+  if (opened) {
+    openReporter.succeed(`Opened ${chalk.underline(url)}`);
+    return;
+  }
+
+  openReporter.fail("Could not open browser automatically");
+  logError(`could not open browser automatically. Open ${url}`);
 }
 
 main().catch((error) => {
