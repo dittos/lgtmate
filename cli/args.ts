@@ -6,6 +6,11 @@ type RepositoryReference = {
   repo: string;
 };
 
+type PullRequestReference = {
+  repositoryRef: RepositoryReference;
+  prNumber: number;
+};
+
 export type ParsedArgs =
   | { kind: "help" }
   | {
@@ -26,6 +31,25 @@ function parsePullRequestNumber(value: string): number {
   }
 
   return number;
+}
+
+function parsePullRequestReference(value: string): PullRequestReference | null {
+  const normalized = value.trim();
+  const match = normalized.match(
+    /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/[^?#]*)?(?:[?#].*)?$/i
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    repositoryRef: {
+      owner: match[1],
+      repo: match[2]
+    },
+    prNumber: parsePullRequestNumber(match[3])
+  };
 }
 
 function parseRepositoryReference(value: string): RepositoryReference {
@@ -127,6 +151,19 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
 
   if (positionals.length === 1) {
+    const pullRequestRef = parsePullRequestReference(positionals[0]);
+
+    if (pullRequestRef) {
+      return {
+        kind: "run",
+        repositoryRef: pullRequestRef.repositoryRef,
+        prNumber: pullRequestRef.prNumber,
+        provider,
+        port: port ?? DEFAULT_PORT,
+        openBrowser
+      };
+    }
+
     return {
       kind: "run",
       repositoryRef: null,

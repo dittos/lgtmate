@@ -74,6 +74,9 @@ export function printUsage(output: StreamLike = process.stderr): void {
   output.write(
     "       lgtm <pr-number> [--provider codex|claude] [--port <number>] [--no-open]\n"
   );
+  output.write(
+    "       lgtm https://github.com/<owner>/<repo>/pull/<pr-number> [--provider codex|claude] [--port <number>] [--no-open]\n"
+  );
 }
 
 export function createCliOutput(options: {

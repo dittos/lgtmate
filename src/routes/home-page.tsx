@@ -34,7 +34,7 @@ function parsePullRequestInput(value: string) {
     }
 
     const pathMatch = parsedUrl.pathname.match(
-      /^\/([\w.-]+)\/([\w.-]+)\/pull\/([1-9]\d*)\/?$/u
+      /^\/([\w.-]+)\/([\w.-]+)\/pull\/([1-9]\d*)(?:\/[^?#]*)?\/?$/u
     );
 
     if (!pathMatch) {
