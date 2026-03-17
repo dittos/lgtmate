@@ -13,6 +13,7 @@ const DEFAULT_PROVIDER = "codex";
 const DEFAULT_PORT = 1973;
 const SERVER_START_TIMEOUT_MS = 20000;
 const HEALTH_POLL_INTERVAL_MS = 250;
+const ANALYSIS_POLL_INTERVAL_MS = 1000;
 
 const VALID_PROVIDERS = new Set(["codex", "claude"]);
 
@@ -531,6 +532,102 @@ async function lookupPullRequestAnalysis({ owner, repo, prNumber, port }) {
   return payload;
 }
 
+async function waitForAnalysisCompletion({ owner, repo, prNumber, port, initialState, shouldStop }) {
+  let latestState = initialState;
+  let lastJobStatus = null;
+  let lastProgressMessage = null;
+
+  while (true) {
+    if (shouldStop?.()) {
+      return latestState;
+    }
+
+    if (latestState.analysis) {
+      return latestState;
+    }
+
+    const currentJob = latestState.job;
+
+    if (currentJob) {
+      if (currentJob.status !== lastJobStatus) {
+        console.log(`Analysis status: ${currentJob.status}`);
+        lastJobStatus = currentJob.status;
+      }
+
+      if (
+        typeof currentJob.progressMessage === "string" &&
+        currentJob.progressMessage &&
+        currentJob.progressMessage !== lastProgressMessage
+      ) {
+        console.log(`Analysis progress: ${currentJob.progressMessage}`);
+        lastProgressMessage = currentJob.progressMessage;
+      }
+
+      if (currentJob.status === "failed" || currentJob.status === "cancelled") {
+        return latestState;
+      }
+    }
+
+    await sleep(ANALYSIS_POLL_INTERVAL_MS);
+
+    if (shouldStop?.()) {
+      return latestState;
+    }
+
+    latestState = await lookupPullRequestAnalysis({ owner, repo, prNumber, port });
+  }
+}
+
+function waitForEnterToOpen(url) {
+  if (!process.stdin.isTTY) {
+    return {
+      promise: new Promise(() => {}),
+      cleanup() {}
+    };
+  }
+
+  console.log("Press Enter to open in the browser before analysis completes.");
+
+  let settled = false;
+  let handleData = null;
+
+  const cleanup = () => {
+    if (handleData) {
+      process.stdin.off("data", handleData);
+    }
+    process.stdin.pause();
+  };
+
+  const promise = new Promise((resolve) => {
+    handleData = async (chunk) => {
+      const text = chunk.toString();
+
+      if (!text.includes("\n") && !text.includes("\r")) {
+        return;
+      }
+
+      cleanup();
+      settled = true;
+      console.log("Opening browser before analysis completes.");
+      resolve(await openUrl(url));
+    };
+
+    process.stdin.on("data", handleData);
+    process.stdin.resume();
+  });
+
+  return {
+    promise,
+    cleanup() {
+      if (settled) {
+        return;
+      }
+
+      cleanup();
+    }
+  };
+}
+
 async function isExecutableAvailable(command) {
   try {
     await runCommand("bash", ["-lc", `command -v ${command}`]);
@@ -756,7 +853,54 @@ async function main() {
   }
 
   if (openBrowser) {
-    const opened = await openUrl(url);
+    let opened = false;
+
+    if (analysisLookup.analysis) {
+      opened = await openUrl(url);
+    } else {
+      const enterToOpen = waitForEnterToOpen(url);
+      let stopWaitingForAnalysis = false;
+      const completion = waitForAnalysisCompletion({
+        owner: repository.owner,
+        repo: repository.repo,
+        prNumber,
+        port: server.port,
+        initialState: job ? { ...analysisLookup, job } : analysisLookup,
+        shouldStop: () => stopWaitingForAnalysis
+      });
+
+      const winner = await Promise.race([
+        enterToOpen.promise.then((manualOpened) => ({
+          type: "manual",
+          opened: manualOpened
+        })),
+        completion.then((finalState) => ({
+          type: "analysis",
+          finalState
+        }))
+      ]);
+
+      if (winner.type === "manual") {
+        stopWaitingForAnalysis = true;
+        opened = winner.opened;
+      } else {
+        enterToOpen.cleanup();
+
+        if (winner.finalState.analysis) {
+          console.log("Analysis complete. Opening browser.");
+        } else if (winner.finalState.job?.status === "failed") {
+          console.error(`lgtm: analysis failed: ${winner.finalState.job.error ?? "Unknown error"}`);
+          console.log("Opening browser with the failed analysis state.");
+        } else if (winner.finalState.job?.status === "cancelled") {
+          console.error(
+            `lgtm: analysis cancelled: ${winner.finalState.job.error ?? "Cancelled"}`
+          );
+          console.log("Opening browser with the cancelled analysis state.");
+        }
+
+        opened = await openUrl(url);
+      }
+    }
 
     if (!opened) {
       console.error(`lgtm: could not open browser automatically. Open ${url}`);
