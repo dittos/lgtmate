@@ -1,7 +1,5 @@
 import { createScenarioDeps, runCli } from "../cli/index.ts";
 
-const scenarioName = process.argv[2] ?? "existing-analysis";
-
 const scenarios = {
   "existing-analysis": {
     analysis: {
@@ -12,6 +10,19 @@ const scenarios = {
     },
     server: {
       reused: true,
+      port: 1973
+    }
+  },
+  "server-start": {
+    analysis: {
+      existingAnalysis: {
+        provider: "codex",
+        completedAt: "2026-03-18T00:00:05.000Z"
+      }
+    },
+    server: {
+      reused: false,
+      delayMs: 5000,
       port: 1973
     }
   },
@@ -29,10 +40,35 @@ const scenarios = {
       },
       updates: [
         {
+          delayMs: 600,
+          job: {
+            id: "job-42",
+            status: "queued",
+            progressMessage: "Preparing analysis job"
+          }
+        },
+        {
+          delayMs: 900,
           job: {
             id: "job-42",
             status: "running",
             progressMessage: "Collecting pull request context"
+          }
+        },
+        {
+          delayMs: 1000,
+          job: {
+            id: "job-42",
+            status: "running",
+            progressMessage: "Reviewing changed files"
+          }
+        },
+        {
+          delayMs: 900,
+          job: {
+            id: "job-42",
+            status: "running",
+            progressMessage: "Drafting review summary"
           }
         }
       ],
@@ -99,14 +135,40 @@ const scenarios = {
   }
 } as const;
 
-const scenario = scenarios[scenarioName as keyof typeof scenarios];
+const scenarioNames = Object.keys(scenarios) as Array<keyof typeof scenarios>;
 
-if (!scenario) {
-  process.stderr.write(`Unknown scenario: ${scenarioName}\n`);
+function resolveScenarioName(selection: string | undefined): keyof typeof scenarios | null {
+  if (!selection) {
+    return "existing-analysis";
+  }
+
+  const byName = selection as keyof typeof scenarios;
+
+  if (byName in scenarios) {
+    return byName;
+  }
+
+  if (/^\d+$/.test(selection)) {
+    const index = Number(selection) - 1;
+    return scenarioNames[index] ?? null;
+  }
+
+  return null;
+}
+
+const scenarioSelection = process.argv[2];
+const scenarioName = resolveScenarioName(scenarioSelection);
+
+if (!scenarioName) {
+  const availableScenarios = scenarioNames
+    .map((name, index) => `${index + 1}. ${name}`)
+    .join("\n");
+  const label = scenarioSelection ?? "(none)";
+  process.stderr.write(`Unknown scenario: ${label}\nAvailable scenarios:\n${availableScenarios}\n`);
   process.exit(1);
 }
 
-const deps = createScenarioDeps(scenario, {
+const deps = createScenarioDeps(scenarios[scenarioName], {
   stdout: process.stdout,
   stderr: process.stderr,
   stdin: process.stdin

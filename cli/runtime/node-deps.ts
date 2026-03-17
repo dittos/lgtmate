@@ -254,26 +254,38 @@ function createStorage() {
 
 function createServerService(storage: ReturnType<typeof createStorage>) {
   return {
-    async ensureServerInstance(preferredPort = DEFAULT_PORT): Promise<{
+    async findReusableServerInstance(): Promise<{
       pid: number;
       port: number;
       startedAt: string;
-      reused: boolean;
-    }> {
+    } | null> {
       const existing = await storage.readServerInstance();
 
       if (existing && Number.isInteger(existing.pid) && Number.isInteger(existing.port)) {
         if (isProcessAlive(existing.pid)) {
           if (await isHealthcheckReady(existing.port)) {
-            return { ...existing, reused: true };
+            return existing;
           }
 
           if (await waitForHealthcheck(existing.port, 5000)) {
-            return { ...existing, reused: true };
+            return existing;
           }
         }
 
         await storage.clearServerInstance();
+      }
+
+      return null;
+    },
+    async startServer(preferredPort = DEFAULT_PORT): Promise<{
+      pid: number;
+      port: number;
+      startedAt: string;
+    }> {
+      const existing = await this.findReusableServerInstance();
+
+      if (existing) {
+        return existing;
       }
 
       const port = await findOpenPort(preferredPort);
@@ -314,7 +326,7 @@ function createServerService(storage: ReturnType<typeof createStorage>) {
         throw new CliError(`Timed out waiting for the local server on port ${port}.`);
       }
 
-      return { ...instance, reused: false };
+      return instance;
     }
   };
 }

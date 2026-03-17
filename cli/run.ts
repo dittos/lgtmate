@@ -2,7 +2,7 @@ import chalk from "chalk";
 import { parseArgs } from "./args.ts";
 import { CliError, toErrorMessage } from "./errors.ts";
 import type { CliOutput } from "./output.ts";
-import { formatAnalysisProgress, formatWaitingForAnalysisText } from "./state.ts";
+import { formatAnalysisProgress } from "./state.ts";
 
 type Repository = {
   owner: string;
@@ -37,11 +37,15 @@ type CliDeps = {
     resolveProvider(requestedProvider: string | null): Promise<string>;
   };
   server: {
-    ensureServerInstance(preferredPort: number): Promise<{
+    findReusableServerInstance(): Promise<{
       pid: number;
       port: number;
       startedAt: string;
-      reused: boolean;
+    } | null>;
+    startServer(preferredPort: number): Promise<{
+      pid: number;
+      port: number;
+      startedAt: string;
     }>;
   };
   analysis: {
@@ -82,138 +86,160 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
       return 0;
     }
 
-    await deps.storage.ensureStorageRoot();
+    const runArgs = parsed;
 
-    const { repository } = await deps.repository.resolveRepository(parsed.repositoryRef);
-
-    const serverStatus = deps.output.createStatusReporter("Checking local lgtmate server");
-    const server = await deps.server.ensureServerInstance(parsed.port);
-    serverStatus.succeed(
-      server.reused
-        ? `Server ready on ${chalk.bold(`http://127.0.0.1:${server.port}`)}`
-        : `Server started on ${chalk.bold(`http://127.0.0.1:${server.port}`)}`
-    );
-
-    const analysisLookup = await deps.analysis.lookupPullRequestAnalysis({
-      owner: repository.owner,
-      repo: repository.repo,
-      prNumber: parsed.prNumber,
-      port: server.port
-    });
-
+    let repository!: Repository;
+    let repositoryPath = "";
+    let server!: { pid: number; port: number; startedAt: string };
+    let analysisLookup!: AnalysisState;
     let selectedProvider: string | null = null;
     let job: { id?: string; status?: string } | null = null;
+    let analysisReporter: ReturnType<CliOutput["createStatusReporter"]> | null = null;
 
-    if (!analysisLookup.analysis) {
-      selectedProvider = await deps.provider.resolveProvider(parsed.provider);
+    function formatAnalysisStatus(provider: string, progress: string): string {
+      const base = `Analysis with ${chalk.bold(provider)}: ${progress}`;
 
-      const analysisStartStatus = deps.output.createStatusReporter(
-        `Starting analysis with ${selectedProvider}`
+      if (!deps.output.isInteractivePrompts) {
+        return base;
+      }
+
+      return `${base}\n\nPress Enter to open in the browser before analysis completes.`;
+    }
+
+    function printRepositoryHeader(): void {
+      deps.output.info(
+        `${chalk.bold(`${repository.owner}/${repository.repo}`)} ${chalk.dim(`(${repositoryPath})`)} ${chalk.bold(
+          `#${runArgs.prNumber}`
+        )}`
       );
+    }
+
+    async function loadRepository(): Promise<void> {
+      await deps.storage.ensureStorageRoot();
+      const resolved = await deps.repository.resolveRepository(runArgs.repositoryRef);
+      repository = resolved.repository;
+      repositoryPath = resolved.repositoryPath;
+      printRepositoryHeader();
+      deps.output.printSpacer();
+    }
+
+    async function ensureServer(): Promise<void> {
+      const existingServer = await deps.server.findReusableServerInstance();
+
+      if (existingServer) {
+        server = existingServer;
+        return;
+      }
+
+      server = await (async () => {
+        const serverStatus = deps.output.createStatusReporter("Starting local lgtmate server");
+        const startedServer = await deps.server.startServer(runArgs.port);
+        serverStatus.succeed(`Server started on ${chalk.bold(`http://127.0.0.1:${startedServer.port}`)}`);
+        return startedServer;
+      })();
+    }
+
+    async function ensureAnalysis(): Promise<void> {
+      analysisLookup = await deps.analysis.lookupPullRequestAnalysis({
+        owner: repository.owner,
+        repo: repository.repo,
+        prNumber: runArgs.prNumber,
+        port: server.port
+      });
+
+      if (analysisLookup.analysis) {
+        const cachedMessage = `Analysis with ${chalk.bold(analysisLookup.analysis.provider)}: cached result from ${analysisLookup.analysis.completedAt}`;
+
+        if (deps.output.isInteractiveOutput) {
+          deps.output.createStatusReporter(cachedMessage).succeed(cachedMessage);
+        } else {
+          deps.output.success(cachedMessage);
+        }
+
+        return;
+      }
+
+      selectedProvider = await deps.provider.resolveProvider(runArgs.provider);
       job = await deps.analysis.triggerAnalysis({
         owner: repository.owner,
         repo: repository.repo,
-        prNumber: parsed.prNumber,
+        prNumber: runArgs.prNumber,
         provider: selectedProvider,
         port: server.port
       });
-      analysisStartStatus.succeed(`Analysis started with ${chalk.bold(selectedProvider)}`);
+      const progress = formatAnalysisProgress(job) || (job?.status ?? "queued");
+      analysisReporter = deps.output.createStatusReporter(formatAnalysisStatus(selectedProvider, progress));
     }
 
-    const url = `http://127.0.0.1:${server.port}/${repository.owner}/${repository.repo}/pull/${parsed.prNumber}`;
+    async function waitForAnalysisBeforeOpening(url: string): Promise<number> {
+      if (analysisLookup.analysis) {
+        return openBrowser(url, deps);
+      }
 
-    deps.output.printSpacer();
-    deps.output.printKeyValue(
-      "Repository / PR",
-      `${chalk.bold(`${repository.owner}/${repository.repo}`)} ${chalk.dim("/")} ${chalk.bold(
-        `#${parsed.prNumber}`
-      )}`
-    );
+      const enterToOpen = deps.output.waitForEnter();
+      let stopWaitingForAnalysis = false;
 
-    if (analysisLookup.analysis) {
-      deps.output.printKeyValue(
-        "Analysis",
-        `existing ${chalk.bold(analysisLookup.analysis.provider)} result from ${analysisLookup.analysis.completedAt}`
-      );
-    } else if (job && selectedProvider) {
-      deps.output.printKeyValue("Provider", chalk.bold(selectedProvider));
-      deps.output.printKeyValue("Analysis Job", `${chalk.bold(job.id ?? "unknown")} (${job.status ?? "queued"})`);
+      const winner = await Promise.race([
+        enterToOpen.promise.then(() => ({
+          type: "manual" as const
+        })),
+        deps.analysis
+          .waitForAnalysisCompletion({
+            owner: repository.owner,
+            repo: repository.repo,
+            prNumber: runArgs.prNumber,
+            port: server.port,
+            initialState: { ...analysisLookup, job },
+            shouldStop: () => stopWaitingForAnalysis,
+            onUpdate: (currentJob) => {
+              const progress = formatAnalysisProgress(currentJob);
+
+              if (progress && analysisReporter && selectedProvider) {
+                analysisReporter.update(formatAnalysisStatus(selectedProvider, progress));
+              }
+            }
+          })
+          .then((finalState) => ({
+            type: "analysis" as const,
+            finalState
+          }))
+      ]);
+
+      if (winner.type === "manual") {
+        stopWaitingForAnalysis = true;
+        analysisReporter?.stop();
+        return openBrowser(url, deps);
+      }
+
+      enterToOpen.cleanup();
+
+      if (winner.finalState.analysis) {
+        analysisReporter?.succeed(`Analysis with ${chalk.bold(winner.finalState.analysis.provider)}: completed`);
+      } else if (winner.finalState.job?.status === "failed") {
+        analysisReporter?.fail(
+          `Analysis with ${chalk.bold(selectedProvider ?? "unknown")}: failed - ${winner.finalState.job.error ?? "Unknown error"}`
+        );
+      } else if (winner.finalState.job?.status === "cancelled") {
+        analysisReporter?.warn(
+          `Analysis with ${chalk.bold(selectedProvider ?? "unknown")}: cancelled - ${winner.finalState.job.error ?? "Cancelled"}`
+        );
+      } else {
+        analysisReporter?.stop();
+      }
+
+      return openBrowser(url, deps);
     }
-    deps.output.printSpacer();
 
-    if (!parsed.openBrowser) {
+    await loadRepository();
+    await ensureServer();
+    await ensureAnalysis();
+
+    if (!runArgs.openBrowser) {
       return 0;
     }
 
-    if (analysisLookup.analysis) {
-      return openBrowser(url, deps);
-    }
-
-    const enterToOpen = deps.output.waitForEnter();
-    let stopWaitingForAnalysis = false;
-
-    const waitReporter = deps.output.createStatusReporter(
-      formatWaitingForAnalysisText(
-        parsed.prNumber,
-        null,
-        deps.output.isInteractivePrompts
-      )
-    );
-    const winner = await Promise.race([
-      enterToOpen.promise.then(() => ({
-        type: "manual" as const
-      })),
-      deps.analysis
-        .waitForAnalysisCompletion({
-          owner: repository.owner,
-          repo: repository.repo,
-          prNumber: parsed.prNumber,
-          port: server.port,
-          initialState: { ...analysisLookup, job },
-          shouldStop: () => stopWaitingForAnalysis,
-          onUpdate: (currentJob) => {
-            const progress = formatAnalysisProgress(currentJob);
-
-            if (progress) {
-              waitReporter.update(
-                formatWaitingForAnalysisText(
-                  parsed.prNumber,
-                  progress,
-                  deps.output.isInteractivePrompts
-                )
-              );
-            }
-          }
-        })
-        .then((finalState) => ({
-          type: "analysis" as const,
-          finalState
-        }))
-    ]);
-
-    if (winner.type === "manual") {
-      stopWaitingForAnalysis = true;
-      waitReporter.succeed("Browser opened before analysis completed");
-      deps.output.info("Opening browser before analysis completes.");
-      return openBrowser(url, deps);
-    }
-
-    enterToOpen.cleanup();
-
-    if (winner.finalState.analysis) {
-      waitReporter.succeed("Analysis complete");
-      deps.output.info("Opening browser after analysis completed.");
-    } else if (winner.finalState.job?.status === "failed") {
-      waitReporter.fail(`Analysis failed: ${winner.finalState.job.error ?? "Unknown error"}`);
-      deps.output.warn("Opening browser with the failed analysis state.");
-    } else if (winner.finalState.job?.status === "cancelled") {
-      waitReporter.warn(`Analysis cancelled: ${winner.finalState.job.error ?? "Cancelled"}`);
-      deps.output.warn("Opening browser with the cancelled analysis state.");
-    } else {
-      waitReporter.stop();
-    }
-
-    return openBrowser(url, deps);
+    const url = `http://127.0.0.1:${server.port}/${repository.owner}/${repository.repo}/pull/${runArgs.prNumber}`;
+    return waitForAnalysisBeforeOpening(url);
   } catch (error) {
     deps.output.stopActiveSpinner();
 
@@ -235,15 +261,13 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
 }
 
 async function openBrowser(url: string, deps: CliDeps): Promise<number> {
-  const openReporter = deps.output.createStatusReporter("Opening browser");
+  deps.output.printSpacer();
   const opened = await deps.browser.openUrl(url);
 
   if (opened) {
-    openReporter.succeed(`Opened ${chalk.underline(url)}`);
     return 0;
   }
 
-  openReporter.fail("Could not open browser automatically");
   deps.output.error(`could not open browser automatically. Open ${url}`);
   return 1;
 }

@@ -97,6 +97,7 @@ type Scenario = {
   server?: {
     port?: number;
     reused?: boolean;
+    delayMs?: number;
   };
   analysis?: {
     lookupStates?: Array<{
@@ -124,6 +125,7 @@ type Scenario = {
     };
     delayMs?: number;
     updates?: ReadonlyArray<{
+      delayMs?: number;
       job?: {
         id?: string;
         status?: string;
@@ -281,21 +283,46 @@ export function createScenarioDeps(scenario: Scenario = {}, overrides: ScenarioO
       }
     },
     server: {
-      async ensureServerInstance(preferredPort: number): Promise<{
+      async findReusableServerInstance(): Promise<{
         pid: number;
         port: number;
         startedAt: string;
-        reused: boolean;
+      } | null> {
+        if (scenario.serverError) {
+          throw scenario.serverError;
+        }
+
+        if (scenario.server?.reused === false) {
+          return null;
+        }
+
+        return {
+          pid: 12345,
+          port: scenario.server?.port ?? 1973,
+          startedAt: "2026-03-18T00:00:00.000Z"
+        };
+      },
+      async startServer(preferredPort: number): Promise<{
+        pid: number;
+        port: number;
+        startedAt: string;
       }> {
         if (scenario.serverError) {
           throw scenario.serverError;
         }
 
+        const delayMs = scenario.server?.delayMs ?? 0;
+
+        if (delayMs > 0) {
+          await new Promise((resolve) => {
+            setTimeout(resolve, delayMs);
+          });
+        }
+
         return {
           pid: 12345,
           port: scenario.server?.port ?? preferredPort ?? 1973,
-          startedAt: "2026-03-18T00:00:00.000Z",
-          reused: scenario.server?.reused ?? true
+          startedAt: "2026-03-18T00:00:00.000Z"
         };
       }
     },
@@ -382,6 +409,12 @@ export function createScenarioDeps(scenario: Scenario = {}, overrides: ScenarioO
         for (const update of updates) {
           if (input.shouldStop?.()) {
             return input.initialState;
+          }
+
+          if ((update.delayMs ?? 0) > 0) {
+            await new Promise((resolve) => {
+              setTimeout(resolve, update.delayMs);
+            });
           }
 
           if (update.job) {
