@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { AnalyzerProvider } from "@/lib/analyzer";
 import {
   getAnalysisController,
@@ -19,6 +19,11 @@ import {
 
 const LAST_ANALYSIS_PROVIDER_STORAGE_KEY = "lgtmate-last-analysis-provider";
 const ANALYZER_PROVIDERS: AnalyzerProvider[] = ["codex", "claude"];
+
+type DiffScrollPosition = {
+  top: number;
+  left: number;
+};
 
 function getAvailableAnalysisProvider(
   providers: Record<
@@ -105,8 +110,12 @@ export function usePullRequestPageData({
   const [filesError, setFilesError] = useState<string | null>(null);
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
+  const [diffScrollPositions, setDiffScrollPositions] = useState<
+    Record<string, DiffScrollPosition>
+  >({});
   const [lastUsedAnalysisProvider, setLastUsedAnalysisProvider] =
     useState<AnalyzerProvider | null>(() => getStoredLastAnalysisProvider());
+  const diffScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const analysisController = useAnalysisController({
     owner,
     repo,
@@ -227,6 +236,46 @@ export function usePullRequestPageData({
   }, [owner, repo, number, selectedPath]);
 
   useEffect(() => {
+    setDiffScrollPositions({});
+    diffScrollContainerRef.current = null;
+  }, [owner, repo, number]);
+
+  useLayoutEffect(() => {
+    return () => {
+      if (!selectedPath) {
+        return;
+      }
+
+      const container = diffScrollContainerRef.current;
+
+      if (!container) {
+        return;
+      }
+
+      const nextPosition = {
+        top: container.scrollTop,
+        left: container.scrollLeft
+      };
+
+      setDiffScrollPositions((currentPositions) => {
+        const currentPosition = currentPositions[selectedPath];
+
+        if (
+          currentPosition?.top === nextPosition.top &&
+          currentPosition?.left === nextPosition.left
+        ) {
+          return currentPositions;
+        }
+
+        return {
+          ...currentPositions,
+          [selectedPath]: nextPosition
+        };
+      });
+    };
+  }, [selectedPath]);
+
+  useEffect(() => {
     void analysisController.load();
   }, [analysisController]);
 
@@ -283,14 +332,23 @@ export function usePullRequestPageData({
     return countsByPath;
   }
 
+  const handleDiffScrollContainerReady = useCallback(
+    (element: HTMLDivElement | null) => {
+      diffScrollContainerRef.current = element;
+    },
+    []
+  );
+
   return {
     analysisProvider,
     commentCountsByPath: getCommentCountsByPath(),
     commentsError,
     diffError,
+    diffScrollPosition: selectedPath ? diffScrollPositions[selectedPath] ?? null : null,
     files,
     filesError,
     handleAnalyze,
+    handleDiffScrollContainerReady,
     isCommentsLoading,
     isDiffLoading,
     isFilesLoading,

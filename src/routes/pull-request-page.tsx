@@ -17,9 +17,11 @@ export function PullRequestPage() {
     commentCountsByPath,
     commentsError,
     diffError,
+    diffScrollPosition,
     files,
     filesError,
     handleAnalyze,
+    handleDiffScrollContainerReady,
     isCommentsLoading,
     isDiffLoading,
     isFilesLoading,
@@ -114,6 +116,8 @@ export function PullRequestPage() {
               commentsError={commentsError}
               isDiffLoading={isDiffLoading}
               diffError={diffError}
+              diffScrollPosition={diffScrollPosition}
+              onDiffScrollContainerReady={handleDiffScrollContainerReady}
             />
           }
         />

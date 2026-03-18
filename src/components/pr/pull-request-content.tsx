@@ -15,7 +15,9 @@ export function PullRequestContent({
   isCommentsLoading,
   commentsError,
   isDiffLoading,
-  diffError
+  diffError,
+  diffScrollPosition,
+  onDiffScrollContainerReady
 }: {
   pullRequest: GithubPullRequest;
   selectedPath: string | null;
@@ -25,10 +27,13 @@ export function PullRequestContent({
   commentsError: string | null;
   isDiffLoading: boolean;
   diffError: string | null;
+  diffScrollPosition: { top: number; left: number } | null;
+  onDiffScrollContainerReady: (element: HTMLDivElement | null) => void;
 }) {
   if (selectedPath) {
     return (
       <FileDiffPanel
+        selectedPath={selectedPath}
         file={selectedFile}
         patch={selectedFile ? buildPullRequestFilePatch(selectedFile) : null}
         reviewThreads={reviewThreads}
@@ -36,6 +41,8 @@ export function PullRequestContent({
         commentsError={commentsError}
         isLoading={isDiffLoading}
         error={diffError}
+        savedScrollPosition={diffScrollPosition}
+        onScrollContainerReady={onDiffScrollContainerReady}
       />
     );
   }

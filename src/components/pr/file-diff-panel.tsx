@@ -1,4 +1,13 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { Columns2, ExternalLink, Rows3 } from "lucide-react";
 import type { DiffLineAnnotation } from "@pierre/diffs/react";
 import { Button } from "@/components/ui/button";
@@ -33,14 +42,18 @@ function getStoredDiffStyle(): "unified" | "split" {
 }
 
 export function FileDiffPanel({
+  selectedPath,
   file,
   patch,
   reviewThreads,
   isCommentsLoading,
   commentsError,
   isLoading,
-  error
+  error,
+  savedScrollPosition,
+  onScrollContainerReady
 }: {
+  selectedPath: string | null;
   file: GithubPullRequestRestFile | null;
   patch: string | null;
   reviewThreads: GithubPullRequestDiffCommentThread[];
@@ -48,11 +61,18 @@ export function FileDiffPanel({
   commentsError: string | null;
   isLoading: boolean;
   error: string | null;
+  savedScrollPosition: { top: number; left: number } | null;
+  onScrollContainerReady: (element: HTMLDivElement | null) => void;
 }) {
   const { theme } = useTheme();
   const [diffStyle, setDiffStyle] = useState<"unified" | "split">(() =>
     getStoredDiffStyle()
   );
+  const [renderVersion, setRenderVersion] = useState(0);
+  const diffContainerRef = useRef<HTMLDivElement | null>(null);
+  const handlePatchRender = useCallback(() => {
+    setRenderVersion((currentVersion) => currentVersion + 1);
+  }, []);
   const lineAnnotations = useMemo<DiffLineAnnotation<DiffCommentAnnotation>[]>(
     () =>
       reviewThreads.map((thread) => ({
@@ -68,6 +88,42 @@ export function FileDiffPanel({
   useEffect(() => {
     window.localStorage.setItem(DIFF_STYLE_STORAGE_KEY, diffStyle);
   }, [diffStyle]);
+
+  const handleDiffContainerRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      diffContainerRef.current = element;
+      onScrollContainerReady(element);
+    },
+    [onScrollContainerReady]
+  );
+
+  useLayoutEffect(() => {
+    if (
+      !selectedPath ||
+      isLoading ||
+      error ||
+      !file ||
+      !patch ||
+      !diffContainerRef.current
+    ) {
+      return;
+    }
+
+    let frameId = window.requestAnimationFrame(() => {
+      const container = diffContainerRef.current;
+
+      if (!container) {
+        return;
+      }
+
+      container.scrollTop = savedScrollPosition?.top ?? 0;
+      container.scrollLeft = savedScrollPosition?.left ?? 0;
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [selectedPath, isLoading, error, file, patch, savedScrollPosition, renderVersion]);
 
   if (isLoading) {
     return (
@@ -187,7 +243,10 @@ export function FileDiffPanel({
           Comments could not be loaded. Diff rendering is still available.
         </div>
       ) : null}
-      <div className="diff-frame min-h-0 flex-1 overflow-auto rounded-2xl border border-border/70 bg-background/80 shadow-sm">
+      <div
+        ref={handleDiffContainerRef}
+        className="diff-frame min-h-0 flex-1 overflow-auto rounded-2xl border border-border/70 bg-background/80 shadow-sm"
+      >
         <Suspense
           fallback={
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -195,34 +254,65 @@ export function FileDiffPanel({
             </div>
           }
         >
-          <PatchDiff
+          <RenderedPatchDiff
             patch={patch}
-            options={{
-              diffStyle,
-              overflow: "wrap",
-              disableFileHeader: true,
-              themeType: theme
-            }}
+            diffStyle={diffStyle}
+            theme={theme}
             lineAnnotations={lineAnnotations}
-            renderAnnotation={(annotation) => {
-              const metadata = annotation.metadata as DiffCommentAnnotation | undefined;
-
-              if (!metadata) {
-                return null;
-              }
-
-              return (
-                <ReviewThreadAnnotation
-                  thread={metadata.thread}
-                  isCommentsLoading={isCommentsLoading}
-                />
-              );
-            }}
-            className="min-w-full"
+            isCommentsLoading={isCommentsLoading}
+            onRender={handlePatchRender}
           />
         </Suspense>
       </div>
     </div>
+  );
+}
+
+function RenderedPatchDiff({
+  patch,
+  diffStyle,
+  theme,
+  lineAnnotations,
+  isCommentsLoading,
+  onRender
+}: {
+  patch: string;
+  diffStyle: "unified" | "split";
+  theme: "light" | "dark";
+  lineAnnotations: DiffLineAnnotation<DiffCommentAnnotation>[];
+  isCommentsLoading: boolean;
+  onRender: () => void;
+}) {
+  useLayoutEffect(() => {
+    onRender();
+  }, [patch, diffStyle, theme, lineAnnotations, isCommentsLoading, onRender]);
+
+  return (
+    <PatchDiff
+      patch={patch}
+      options={{
+        diffStyle,
+        overflow: "wrap",
+        disableFileHeader: true,
+        themeType: theme
+      }}
+      lineAnnotations={lineAnnotations}
+      renderAnnotation={(annotation) => {
+        const metadata = annotation.metadata as DiffCommentAnnotation | undefined;
+
+        if (!metadata) {
+          return null;
+        }
+
+        return (
+          <ReviewThreadAnnotation
+            thread={metadata.thread}
+            isCommentsLoading={isCommentsLoading}
+          />
+        );
+      }}
+      className="min-w-full"
+    />
   );
 }
 
