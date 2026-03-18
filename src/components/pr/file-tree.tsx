@@ -169,11 +169,13 @@ function compressDirectoryNode(node: FileTreeNode): CompressedDirectoryNode {
 
 function FileRow({
   file,
+  commentCount,
   selectedPath,
   onSelect,
   indent = 0
 }: {
   file: GithubPullRequestFileNode;
+  commentCount: number;
   selectedPath: string | null;
   onSelect: (path: string) => void;
   indent?: number;
@@ -221,16 +223,19 @@ function FileRow({
           ) : null}
         </span>
       </span>
+      <FileCommentCountBadge count={commentCount} />
     </button>
   );
 }
 
 function PlainPathTree({
   files,
+  commentCountsByPath,
   selectedPath,
   onSelect
 }: {
   files: GithubPullRequestFileNode[];
+  commentCountsByPath: Record<string, number>;
   selectedPath: string | null;
   onSelect: (path: string) => void;
 }) {
@@ -242,6 +247,7 @@ function PlainPathTree({
         <FileTreeNodeView
           key={node.name}
           node={node}
+          commentCountsByPath={commentCountsByPath}
           depth={0}
           selectedPath={selectedPath}
           onSelect={onSelect}
@@ -323,6 +329,7 @@ export function FileTree({
   repo,
   number,
   files,
+  commentCountsByPath,
   selectedPath,
   onSelect,
   onSelectDescription,
@@ -334,6 +341,7 @@ export function FileTree({
   repo: string;
   number: number;
   files: GithubPullRequestFileNode[];
+  commentCountsByPath: Record<string, number>;
   selectedPath: string | null;
   onSelect(path: string): void;
   onSelectDescription(): void;
@@ -471,6 +479,7 @@ export function FileTree({
           {mode === "plain" ? (
             <PlainPathTree
               files={files}
+              commentCountsByPath={commentCountsByPath}
               selectedPath={selectedPath}
               onSelect={onSelect}
             />
@@ -490,6 +499,7 @@ export function FileTree({
               </div>
               <PlainPathTree
                 files={files}
+                commentCountsByPath={commentCountsByPath}
                 selectedPath={selectedPath}
                 onSelect={onSelect}
               />
@@ -595,6 +605,7 @@ export function FileTree({
                                       <FileRow
                                         key={path}
                                         file={file}
+                                        commentCount={commentCountsByPath[path] ?? 0}
                                         selectedPath={selectedPath}
                                         onSelect={onSelect}
                                         indent={8}
@@ -635,6 +646,7 @@ export function FileTree({
                         <FileRow
                           key={path}
                           file={file}
+                          commentCount={commentCountsByPath[path] ?? 0}
                           selectedPath={selectedPath}
                           onSelect={onSelect}
                           indent={8}
@@ -654,11 +666,13 @@ export function FileTree({
 
 function FileTreeNodeView({
   node,
+  commentCountsByPath,
   depth,
   selectedPath,
   onSelect
 }: {
   node: FileTreeNode;
+  commentCountsByPath: Record<string, number>;
   depth: number;
   selectedPath: string | null;
   onSelect(path: string): void;
@@ -683,6 +697,7 @@ function FileTreeNodeView({
             <FileTreeNodeView
               key={`${compressed.label}/${child.name}`}
               node={child}
+              commentCountsByPath={commentCountsByPath}
               depth={depth + 1}
               selectedPath={selectedPath}
               onSelect={onSelect}
@@ -729,6 +744,7 @@ function FileTreeNodeView({
         <TruncatedText text={node.name} className="min-w-0 flex-1" />
       </span>
       <span className="flex shrink-0 items-center gap-2 text-[0.72rem] tabular-nums">
+        <FileCommentCountBadge count={commentCountsByPath[node.file.path] ?? 0} />
         <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
           <Plus className="size-3" />
           {node.file.additions}
@@ -739,5 +755,17 @@ function FileTreeNodeView({
         </span>
       </span>
     </button>
+  );
+}
+
+function FileCommentCountBadge({ count }: { count: number }) {
+  if (count < 1) {
+    return null;
+  }
+
+  return (
+    <span className="inline-flex items-center rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[0.65rem] font-semibold text-sky-700 dark:text-sky-200">
+      {count}
+    </span>
   );
 }

@@ -9,9 +9,12 @@ import {
   getPullRequest,
   getPullRequestFileDiff,
   getPullRequestFiles,
+  getPullRequestReviewThreads,
   type GithubPullRequest,
+  type GithubPullRequestDiffCommentThread,
   type GithubPullRequestFileNode,
-  type GithubPullRequestRestFile
+  type GithubPullRequestRestFile,
+  type GithubPullRequestReviewThreadsByPath
 } from "@/lib/github";
 
 const LAST_ANALYSIS_PROVIDER_STORAGE_KEY = "lgtmate-last-analysis-provider";
@@ -92,11 +95,15 @@ export function usePullRequestPageData({
   const [selectedFile, setSelectedFile] = useState<GithubPullRequestRestFile | null>(
     null
   );
+  const [reviewThreadsByPath, setReviewThreadsByPath] =
+    useState<GithubPullRequestReviewThreadsByPath>({});
   const [isPullRequestLoading, setIsPullRequestLoading] = useState(true);
   const [isFilesLoading, setIsFilesLoading] = useState(true);
+  const [isCommentsLoading, setIsCommentsLoading] = useState(true);
   const [isDiffLoading, setIsDiffLoading] = useState(false);
   const [pullRequestError, setPullRequestError] = useState<string | null>(null);
   const [filesError, setFilesError] = useState<string | null>(null);
+  const [commentsError, setCommentsError] = useState<string | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
   const [lastUsedAnalysisProvider, setLastUsedAnalysisProvider] =
     useState<AnalyzerProvider | null>(() => getStoredLastAnalysisProvider());
@@ -128,17 +135,31 @@ export function usePullRequestPageData({
       try {
         setIsPullRequestLoading(true);
         setIsFilesLoading(true);
+        setIsCommentsLoading(true);
         setPullRequestError(null);
         setFilesError(null);
+        setCommentsError(null);
 
-        const [nextPullRequest, nextFiles] = await Promise.all([
+        const [nextPullRequest, nextFiles, nextReviewThreadsByPath] = await Promise.all([
           getPullRequest(owner, repo, number),
-          getPullRequestFiles(owner, repo, number)
+          getPullRequestFiles(owner, repo, number),
+          getPullRequestReviewThreads(owner, repo, number).catch((error: unknown) => {
+            if (isActive) {
+              setCommentsError(
+                error instanceof Error
+                  ? error.message
+                  : "Failed to load pull request comments"
+              );
+            }
+
+            return {};
+          })
         ]);
 
         if (isActive) {
           setPullRequest(nextPullRequest);
           setFiles(nextFiles);
+          setReviewThreadsByPath(nextReviewThreadsByPath);
         }
       } catch (error) {
         if (isActive) {
@@ -151,6 +172,7 @@ export function usePullRequestPageData({
         if (isActive) {
           setIsPullRequestLoading(false);
           setIsFilesLoading(false);
+          setIsCommentsLoading(false);
         }
       }
     }
@@ -229,17 +251,53 @@ export function usePullRequestPageData({
     await targetController.analyze(nextProvider, { forceRefresh: true });
   }
 
+  function getSelectedFileReviewThreads(): GithubPullRequestDiffCommentThread[] {
+    if (!selectedFile) {
+      return [];
+    }
+
+    const normalizedThreads = reviewThreadsByPath[selectedFile.filename] ?? [];
+
+    if (normalizedThreads.length > 0) {
+      return normalizedThreads;
+    }
+
+    if (!selectedFile.previous_filename) {
+      return [];
+    }
+
+    return reviewThreadsByPath[selectedFile.previous_filename] ?? [];
+  }
+
+  function getCommentCountsByPath() {
+    const countsByPath: Record<string, number> = {};
+
+    for (const [path, threads] of Object.entries(reviewThreadsByPath)) {
+      countsByPath[path] = threads.reduce(
+        (count, thread) =>
+          thread.isOutdated ? count : count + thread.comments.length,
+        0
+      );
+    }
+
+    return countsByPath;
+  }
+
   return {
     analysisProvider,
+    commentCountsByPath: getCommentCountsByPath(),
+    commentsError,
     diffError,
     files,
     filesError,
     handleAnalyze,
+    isCommentsLoading,
     isDiffLoading,
     isFilesLoading,
     isPullRequestLoading,
     pullRequest,
     pullRequestError,
+    reviewThreads: getSelectedFileReviewThreads(),
     selectedFile
   };
 }

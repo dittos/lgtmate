@@ -1,8 +1,13 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { Columns2, ExternalLink, Rows3 } from "lucide-react";
+import type { DiffLineAnnotation } from "@pierre/diffs/react";
 import { Button } from "@/components/ui/button";
 import { TruncatedText } from "@/components/ui/truncated-text";
-import { formatChangeType, type GithubPullRequestRestFile } from "@/lib/github";
+import {
+  formatChangeType,
+  type GithubPullRequestDiffCommentThread,
+  type GithubPullRequestRestFile
+} from "@/lib/github";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +17,10 @@ const PatchDiff = lazy(async () => {
 });
 
 const DIFF_STYLE_STORAGE_KEY = "lgtmate-diff-style";
+
+type DiffCommentAnnotation = {
+  thread: GithubPullRequestDiffCommentThread;
+};
 
 function getStoredDiffStyle(): "unified" | "split" {
   if (typeof window === "undefined") {
@@ -26,17 +35,34 @@ function getStoredDiffStyle(): "unified" | "split" {
 export function FileDiffPanel({
   file,
   patch,
+  reviewThreads,
+  isCommentsLoading,
+  commentsError,
   isLoading,
   error
 }: {
   file: GithubPullRequestRestFile | null;
   patch: string | null;
+  reviewThreads: GithubPullRequestDiffCommentThread[];
+  isCommentsLoading: boolean;
+  commentsError: string | null;
   isLoading: boolean;
   error: string | null;
 }) {
   const { theme } = useTheme();
   const [diffStyle, setDiffStyle] = useState<"unified" | "split">(() =>
     getStoredDiffStyle()
+  );
+  const lineAnnotations = useMemo<DiffLineAnnotation<DiffCommentAnnotation>[]>(
+    () =>
+      reviewThreads.map((thread) => ({
+        side: thread.side,
+        lineNumber: thread.lineNumber,
+        metadata: {
+          thread
+        }
+      })),
+    [reviewThreads]
   );
 
   useEffect(() => {
@@ -76,6 +102,11 @@ export function FileDiffPanel({
         <p className="mb-5 text-sm text-muted-foreground">
           GitHub did not provide a textual patch for this file.
         </p>
+        {commentsError ? (
+          <p className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+            Comments could not be loaded: {commentsError}
+          </p>
+        ) : null}
         {file.blob_url ? (
           <a
             href={file.blob_url}
@@ -151,6 +182,11 @@ export function FileDiffPanel({
           ) : null}
         </div>
       </div>
+      {commentsError ? (
+        <div className="mb-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+          Comments could not be loaded. Diff rendering is still available.
+        </div>
+      ) : null}
       <div className="diff-frame min-h-0 flex-1 overflow-auto rounded-2xl border border-border/70 bg-background/80 shadow-sm">
         <Suspense
           fallback={
@@ -167,10 +203,92 @@ export function FileDiffPanel({
               disableFileHeader: true,
               themeType: theme
             }}
+            lineAnnotations={lineAnnotations}
+            renderAnnotation={(annotation) => {
+              const metadata = annotation.metadata as DiffCommentAnnotation | undefined;
+
+              if (!metadata) {
+                return null;
+              }
+
+              return (
+                <ReviewThreadAnnotation
+                  thread={metadata.thread}
+                  isCommentsLoading={isCommentsLoading}
+                />
+              );
+            }}
             className="min-w-full"
           />
         </Suspense>
       </div>
     </div>
   );
+}
+
+function ReviewThreadAnnotation({
+  thread,
+  isCommentsLoading
+}: {
+  thread: GithubPullRequestDiffCommentThread;
+  isCommentsLoading: boolean;
+}) {
+  return (
+    <div className="mx-3 my-2 whitespace-normal rounded-2xl border border-border/70 bg-muted/60 p-3 font-sans shadow-sm">
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+        <span>{thread.comments.length} comment{thread.comments.length === 1 ? "" : "s"}</span>
+        {thread.isResolved ? (
+          <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-[10px] text-emerald-700 dark:text-emerald-300">
+            Resolved
+          </span>
+        ) : null}
+        {thread.isOutdated ? (
+          <span className="rounded-full bg-amber-500/15 px-2 py-1 text-[10px] text-amber-700 dark:text-amber-300">
+            Outdated
+          </span>
+        ) : null}
+        {isCommentsLoading ? <span>Loading comments...</span> : null}
+      </div>
+      <div className="space-y-3">
+        {thread.comments.map((comment) => (
+          <article key={comment.id} className="rounded-xl bg-background/85 p-3">
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-bold">
+                {comment.author?.login ?? "ghost"}
+              </span>
+              <time className="text-xs text-muted-foreground">
+                {formatCommentTimestamp(comment.createdAt)}
+              </time>
+              <a
+                href={comment.url}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                GitHub
+                <ExternalLink className="size-3" />
+              </a>
+            </div>
+            <div
+              className="markdown-body comment-body max-w-none text-foreground"
+              dangerouslySetInnerHTML={{ __html: comment.bodyHTML }}
+            />
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatCommentTimestamp(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(date);
 }

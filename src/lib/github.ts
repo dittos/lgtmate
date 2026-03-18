@@ -10,7 +10,6 @@ const FILES_PER_PAGE = 100;
 // Mangled a bit to avoid token scanning.
 const PUBLIC_TOKEN = "mp8ke1wLfOlimDLlkOEqaLTf69eIVe1YOo3j_phg".split("").reverse().join("");
 
-const pullRequestFilesCache = new Map<string, Promise<GithubPullRequestFileNode[]>>();
 const pullRequestRestFilesCache = new Map<
   string,
   Promise<GithubPullRequestRestFile[]>
@@ -38,6 +37,16 @@ type PullRequestFilesGraphqlData = {
           hasNextPage: boolean;
           endCursor: string | null;
         };
+      } | null;
+    } | null;
+  } | null;
+};
+
+type PullRequestReviewThreadsGraphqlData = {
+  repository: {
+    pullRequest: {
+      reviewThreads: {
+        nodes: GithubPullRequestReviewThread[];
       } | null;
     } | null;
   } | null;
@@ -91,6 +100,45 @@ export type GithubPullRequestRestFile = {
   blob_url: string | null;
   previous_filename?: string;
 };
+
+export type GithubPullRequestReviewComment = {
+  id: string;
+  author: {
+    login: string;
+  } | null;
+  body: string;
+  bodyHTML: string;
+  createdAt: string;
+  url: string;
+};
+
+export type GithubPullRequestReviewThread = {
+  id: string;
+  path: string;
+  diffSide: "LEFT" | "RIGHT" | null;
+  line: number | null;
+  originalLine: number | null;
+  isResolved: boolean;
+  isOutdated: boolean;
+  comments: {
+    nodes: GithubPullRequestReviewComment[];
+  } | null;
+};
+
+export type GithubPullRequestDiffCommentThread = {
+  id: string;
+  path: string;
+  side: "additions" | "deletions";
+  lineNumber: number;
+  isResolved: boolean;
+  isOutdated: boolean;
+  comments: GithubPullRequestReviewComment[];
+};
+
+export type GithubPullRequestReviewThreadsByPath = Record<
+  string,
+  GithubPullRequestDiffCommentThread[]
+>;
 
 function getPullRequestCacheKey(owner: string, repo: string, number: number) {
   return `${owner}/${repo}#${number}`;
@@ -245,6 +293,110 @@ export async function getPullRequest(
   return pullRequest;
 }
 
+function normalizeReviewThread(
+  thread: GithubPullRequestReviewThread
+): GithubPullRequestDiffCommentThread | null {
+  const comments = thread.comments?.nodes?.filter(Boolean) ?? [];
+
+  if (comments.length === 0) {
+    return null;
+  }
+
+  if (typeof thread.line === "number" && thread.line > 0) {
+    return {
+      id: thread.id,
+      path: thread.path,
+      side: thread.diffSide === "LEFT" ? "deletions" : "additions",
+      lineNumber: thread.line,
+      isResolved: thread.isResolved,
+      isOutdated: thread.isOutdated,
+      comments
+    };
+  }
+
+  if (typeof thread.originalLine === "number" && thread.originalLine > 0) {
+    return {
+      id: thread.id,
+      path: thread.path,
+      side: "deletions",
+      lineNumber: thread.originalLine,
+      isResolved: thread.isResolved,
+      isOutdated: thread.isOutdated,
+      comments
+    };
+  }
+
+  return null;
+}
+
+function groupReviewThreadsByPath(threads: GithubPullRequestReviewThread[]) {
+  const reviewThreadsByPath: GithubPullRequestReviewThreadsByPath = {};
+
+  for (const thread of threads) {
+    const normalizedThread = normalizeReviewThread(thread);
+
+    if (!normalizedThread) {
+      continue;
+    }
+
+    reviewThreadsByPath[normalizedThread.path] ??= [];
+    reviewThreadsByPath[normalizedThread.path].push(normalizedThread);
+  }
+
+  return reviewThreadsByPath;
+}
+
+export async function getPullRequestReviewThreads(
+  owner: string,
+  repo: string,
+  number: number
+) {
+  const query = `
+    query PullRequestReviewThreads($owner: String!, $repo: String!, $number: Int!) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $number) {
+          reviewThreads(last: 100) {
+            nodes {
+              id
+              path
+              diffSide
+              line
+              originalLine
+              isResolved
+              isOutdated
+              comments(first: 100) {
+                nodes {
+                  id
+                  body
+                  bodyHTML
+                  createdAt
+                  url
+                  author {
+                    login
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const data = await fetchGithubGraphql<PullRequestReviewThreadsGraphqlData>(
+    query,
+    { owner, repo, number },
+    "PullRequestReviewThreads"
+  );
+  const reviewThreads = data.repository?.pullRequest?.reviewThreads?.nodes;
+
+  if (!reviewThreads) {
+    throw new Error("Unable to load pull request review threads");
+  }
+
+  return groupReviewThreadsByPath(reviewThreads);
+}
+
 async function getPullRequestFilesGraphqlPage(
   owner: string,
   repo: string,
@@ -312,42 +464,24 @@ export async function getPullRequestFiles(
   repo: string,
   number: number
 ) {
-  const cacheKey = getPullRequestCacheKey(owner, repo, number);
-  const cachedFiles = pullRequestFilesCache.get(cacheKey);
+  const files: GithubPullRequestFileNode[] = [];
+  let cursor: string | null = null;
 
-  if (cachedFiles) {
-    return cachedFiles;
-  }
+  while (true) {
+    const connection = await getPullRequestFilesGraphqlPage(
+      owner,
+      repo,
+      number,
+      cursor
+    );
 
-  const request = (async () => {
-    const files: GithubPullRequestFileNode[] = [];
-    let cursor: string | null = null;
+    files.push(...(connection.nodes ?? []));
 
-    while (true) {
-      const connection = await getPullRequestFilesGraphqlPage(
-        owner,
-        repo,
-        number,
-        cursor
-      );
-
-      files.push(...(connection.nodes ?? []));
-
-      if (!connection.pageInfo.hasNextPage) {
-        return files;
-      }
-
-      cursor = connection.pageInfo.endCursor;
+    if (!connection.pageInfo.hasNextPage) {
+      return files;
     }
-  })();
 
-  pullRequestFilesCache.set(cacheKey, request);
-
-  try {
-    return await request;
-  } catch (error) {
-    pullRequestFilesCache.delete(cacheKey);
-    throw error;
+    cursor = connection.pageInfo.endCursor;
   }
 }
 

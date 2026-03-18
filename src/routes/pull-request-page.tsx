@@ -14,15 +14,19 @@ export function PullRequestPage() {
   const selectedPath = searchParams.get("path");
   const {
     analysisProvider,
+    commentCountsByPath,
+    commentsError,
     diffError,
     files,
     filesError,
     handleAnalyze,
+    isCommentsLoading,
     isDiffLoading,
     isFilesLoading,
     isPullRequestLoading,
     pullRequest,
     pullRequestError,
+    reviewThreads,
     selectedFile
   } = usePullRequestPageData({
     owner,
@@ -86,6 +90,7 @@ export function PullRequestPage() {
               files={files}
               isLoading={isFilesLoading}
               error={filesError}
+              commentCountsByPath={commentCountsByPath}
               owner={owner}
               repo={repo}
               number={number}
@@ -104,6 +109,9 @@ export function PullRequestPage() {
               pullRequest={pullRequest}
               selectedPath={selectedPath}
               selectedFile={selectedFile}
+              reviewThreads={reviewThreads}
+              isCommentsLoading={isCommentsLoading}
+              commentsError={commentsError}
               isDiffLoading={isDiffLoading}
               diffError={diffError}
             />

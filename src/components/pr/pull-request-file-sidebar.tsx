@@ -6,6 +6,7 @@ export function PullRequestFileSidebar({
   files,
   isLoading,
   error,
+  commentCountsByPath,
   owner,
   repo,
   number,
@@ -19,6 +20,7 @@ export function PullRequestFileSidebar({
   files: GithubPullRequestFileNode[];
   isLoading: boolean;
   error: string | null;
+  commentCountsByPath: Record<string, number>;
   owner: string;
   repo: string;
   number: number;
@@ -43,6 +45,7 @@ export function PullRequestFileSidebar({
       repo={repo}
       number={number}
       files={files}
+      commentCountsByPath={commentCountsByPath}
       selectedPath={selectedPath}
       onSelect={onSelect}
       onSelectDescription={onSelectDescription}
