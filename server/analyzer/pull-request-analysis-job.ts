@@ -160,7 +160,8 @@ async function runAnalysisJob(
       owner: input.owner,
       repo: input.repo,
       number: input.number,
-      repositoryPath: input.repositoryPath
+      repositoryPath: input.repositoryPath,
+      headOid: pullRequest.headRefOid
     });
     analysisJobStore.appendProgress(job.id, "Worktree is ready. Starting analyzer...");
 
