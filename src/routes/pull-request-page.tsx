@@ -22,14 +22,17 @@ export function PullRequestPage() {
     filesError,
     handleAnalyze,
     handleDiffScrollContainerReady,
+    handleExpandHiddenContext,
     isCommentsLoading,
     isDiffLoading,
     isFilesLoading,
     isPullRequestLoading,
     pullRequest,
     pullRequestError,
+    renderedPatch,
     reviewThreads,
-    selectedFile
+    selectedFile,
+    trailingHiddenLines
   } = usePullRequestPageData({
     owner,
     repo,
@@ -116,7 +119,10 @@ export function PullRequestPage() {
               commentsError={commentsError}
               isDiffLoading={isDiffLoading}
               diffError={diffError}
+              renderedPatch={renderedPatch}
+              trailingHiddenLines={trailingHiddenLines}
               diffScrollPosition={diffScrollPosition}
+              onExpandHiddenContext={handleExpandHiddenContext}
               onDiffScrollContainerReady={handleDiffScrollContainerReady}
             />
           }

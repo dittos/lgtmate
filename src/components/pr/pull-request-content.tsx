@@ -1,8 +1,9 @@
+import type { FileDiffMetadata } from "@pierre/diffs/react";
 import {
-  buildPullRequestFilePatch,
   type GithubPullRequest,
   type GithubPullRequestDiffCommentThread,
-  type GithubPullRequestRestFile
+  type PullRequestFileDiff,
+  type PullRequestHiddenContextDirection
 } from "@/lib/github";
 import { FileDiffPanel } from "./file-diff-panel";
 import { PullRequestDescription } from "./pull-request-description";
@@ -16,32 +17,46 @@ export function PullRequestContent({
   commentsError,
   isDiffLoading,
   diffError,
+  renderedPatch,
+  trailingHiddenLines,
   diffScrollPosition,
+  onExpandHiddenContext,
   onDiffScrollContainerReady
 }: {
   pullRequest: GithubPullRequest;
   selectedPath: string | null;
-  selectedFile: GithubPullRequestRestFile | null;
+  selectedFile: PullRequestFileDiff | null;
   reviewThreads: GithubPullRequestDiffCommentThread[];
   isCommentsLoading: boolean;
   commentsError: string | null;
   isDiffLoading: boolean;
   diffError: string | null;
+  renderedPatch: FileDiffMetadata | null;
+  trailingHiddenLines: number;
   diffScrollPosition: { top: number; left: number } | null;
+  onExpandHiddenContext: (input: {
+    path: string;
+    anchorLine: number;
+    direction: PullRequestHiddenContextDirection;
+    hunkIndex: number;
+    lineCount: number;
+  }) => Promise<void>;
   onDiffScrollContainerReady: (element: HTMLDivElement | null) => void;
 }) {
   if (selectedPath) {
     return (
       <FileDiffPanel
         selectedPath={selectedPath}
-        file={selectedFile}
-        patch={selectedFile ? buildPullRequestFilePatch(selectedFile) : null}
+        file={selectedFile?.file ?? null}
+        renderedPatch={renderedPatch}
+        trailingHiddenLines={trailingHiddenLines}
         reviewThreads={reviewThreads}
         isCommentsLoading={isCommentsLoading}
         commentsError={commentsError}
         isLoading={isDiffLoading}
         error={diffError}
         savedScrollPosition={diffScrollPosition}
+        onExpandHiddenContext={onExpandHiddenContext}
         onScrollContainerReady={onDiffScrollContainerReady}
       />
     );

@@ -15,14 +15,16 @@ export type PullRequestHiddenContextRequest = {
 export type PullRequestHiddenContextResponse = {
   startLine: number;
   endLine: number;
+  totalLines: number;
   lines: string[];
   hasMoreAbove: boolean;
   hasMoreBelow: boolean;
+  remainingAbove: number;
+  remainingBelow: number;
 };
 
-function splitFileLines(contents: string) {
-  const normalized = contents.replace(/\r\n/g, "\n");
-  const lines = normalized.split("\n");
+export function splitFileLines(contents: string) {
+  const lines = contents.match(/.*?(?:\r\n|\n|\r|$)/g) ?? [];
 
   if (lines.at(-1) === "") {
     lines.pop();
@@ -73,9 +75,12 @@ export function getHiddenContextWindow(input: {
   return {
     startLine,
     endLine,
+    totalLines: input.totalLines,
     lines: [],
     hasMoreAbove: startLine > 1,
-    hasMoreBelow: endLine < input.totalLines
+    hasMoreBelow: endLine < input.totalLines,
+    remainingAbove: startLine - 1,
+    remainingBelow: input.totalLines - endLine
   };
 }
 

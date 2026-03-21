@@ -2,7 +2,7 @@ import path from "node:path";
 import devServer, { defaultOptions as honoDevServerDefaults } from "@hono/vite-dev-server";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [
@@ -17,5 +17,8 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src")
     }
+  },
+  test: {
+    environment: "node"
   }
 });

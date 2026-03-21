@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { getSingularPatch } from "@pierre/diffs";
+import type { FileDiffMetadata } from "@pierre/diffs/react";
+import { applyHiddenContextToFileDiff } from "@/components/pr/file-diff-utils";
 import type { AnalyzerProvider } from "@/lib/analyzer";
 import {
   getAnalysisController,
@@ -9,21 +12,36 @@ import {
   getPullRequest,
   getPullRequestFileDiff,
   getPullRequestFiles,
+  getPullRequestHiddenContext,
   getPullRequestReviewThreads,
   type GithubPullRequest,
   type GithubPullRequestDiffCommentThread,
   type GithubPullRequestFileNode,
-  type GithubPullRequestRestFile,
+  type PullRequestFileDiff,
+  type PullRequestHiddenContextDirection,
   type GithubPullRequestReviewThreadsByPath
 } from "@/lib/github";
 
 const LAST_ANALYSIS_PROVIDER_STORAGE_KEY = "lgtmate-last-analysis-provider";
 const ANALYZER_PROVIDERS: AnalyzerProvider[] = ["codex", "claude"];
-
 type DiffScrollPosition = {
   top: number;
   left: number;
 };
+
+function getLastVisibleLine(fileDiff: FileDiffMetadata) {
+  const lastHunk = fileDiff.hunks.at(-1);
+
+  if (!lastHunk) {
+    return 0;
+  }
+
+  return lastHunk.additionStart + lastHunk.additionCount - 1;
+}
+
+function ensureTrailingNewline(value: string) {
+  return value.endsWith("\n") ? value : `${value}\n`;
+}
 
 function getAvailableAnalysisProvider(
   providers: Record<
@@ -97,7 +115,7 @@ export function usePullRequestPageData({
 }) {
   const [pullRequest, setPullRequest] = useState<GithubPullRequest | null>(null);
   const [files, setFiles] = useState<GithubPullRequestFileNode[]>([]);
-  const [selectedFile, setSelectedFile] = useState<GithubPullRequestRestFile | null>(
+  const [selectedFile, setSelectedFile] = useState<PullRequestFileDiff | null>(
     null
   );
   const [reviewThreadsByPath, setReviewThreadsByPath] =
@@ -112,6 +130,12 @@ export function usePullRequestPageData({
   const [diffError, setDiffError] = useState<string | null>(null);
   const [diffScrollPositions, setDiffScrollPositions] = useState<
     Record<string, DiffScrollPosition>
+  >({});
+  const [renderedPatchesByPath, setRenderedPatchesByPath] = useState<
+    Record<string, FileDiffMetadata | null>
+  >({});
+  const [trailingHiddenLinesByPath, setTrailingHiddenLinesByPath] = useState<
+    Record<string, number>
   >({});
   const [lastUsedAnalysisProvider, setLastUsedAnalysisProvider] =
     useState<AnalyzerProvider | null>(() => getStoredLastAnalysisProvider());
@@ -136,6 +160,7 @@ export function usePullRequestPageData({
     lastUsedProvider: lastUsedAnalysisProvider,
     job: analysisJob
   });
+  const renderedPatch = selectedPath ? renderedPatchesByPath[selectedPath] ?? null : null;
 
   useEffect(() => {
     let isActive = true;
@@ -210,13 +235,52 @@ export function usePullRequestPageData({
         setDiffError(null);
 
         const nextFile = await getPullRequestFileDiff(owner, repo, number, path);
+        const nextRenderedPatch = nextFile.patch
+          ? getSingularPatch(ensureTrailingNewline(nextFile.patch))
+          : null;
+        let trailingHiddenLines = 0;
+
+        if (pullRequest?.headRefOid && nextRenderedPatch && nextRenderedPatch.hunks.length > 0) {
+          try {
+            const lastVisibleLine = Math.max(1, getLastVisibleLine(nextRenderedPatch));
+            const probe = await getPullRequestHiddenContext(owner, repo, number, {
+              commitOid: pullRequest.headRefOid,
+              path,
+              anchorLine: lastVisibleLine,
+              direction: "after",
+              lineCount: 1
+            });
+            trailingHiddenLines = Math.max(
+              0,
+              probe.totalLines - lastVisibleLine
+            );
+          } catch {
+            trailingHiddenLines = 0;
+          }
+        }
 
         if (isActive) {
           setSelectedFile(nextFile);
+          setRenderedPatchesByPath((currentPatches) => ({
+            ...currentPatches,
+            [path]: nextRenderedPatch
+          }));
+          setTrailingHiddenLinesByPath((currentTrailingLines) => ({
+            ...currentTrailingLines,
+            [path]: trailingHiddenLines
+          }));
         }
       } catch (error) {
         if (isActive) {
           setSelectedFile(null);
+          setRenderedPatchesByPath((currentPatches) => ({
+            ...currentPatches,
+            [path]: null
+          }));
+          setTrailingHiddenLinesByPath((currentTrailingLines) => ({
+            ...currentTrailingLines,
+            [path]: 0
+          }));
           setDiffError(
             error instanceof Error ? error.message : "Failed to load file diff"
           );
@@ -233,10 +297,12 @@ export function usePullRequestPageData({
     return () => {
       isActive = false;
     };
-  }, [owner, repo, number, selectedPath]);
+  }, [number, owner, pullRequest?.headRefOid, repo, selectedPath]);
 
   useEffect(() => {
     setDiffScrollPositions({});
+    setRenderedPatchesByPath({});
+    setTrailingHiddenLinesByPath({});
     diffScrollContainerRef.current = null;
   }, [owner, repo, number]);
 
@@ -305,17 +371,17 @@ export function usePullRequestPageData({
       return [];
     }
 
-    const normalizedThreads = reviewThreadsByPath[selectedFile.filename] ?? [];
+    const normalizedThreads = reviewThreadsByPath[selectedFile.file.filename] ?? [];
 
     if (normalizedThreads.length > 0) {
       return normalizedThreads;
     }
 
-    if (!selectedFile.previous_filename) {
+    if (!selectedFile.file.previous_filename) {
       return [];
     }
 
-    return reviewThreadsByPath[selectedFile.previous_filename] ?? [];
+    return reviewThreadsByPath[selectedFile.file.previous_filename] ?? [];
   }
 
   function getCommentCountsByPath() {
@@ -339,6 +405,64 @@ export function usePullRequestPageData({
     []
   );
 
+  const handleExpandHiddenContext = useCallback(
+    async (input: {
+      path: string;
+      anchorLine: number;
+      direction: PullRequestHiddenContextDirection;
+      hunkIndex: number;
+      lineCount: number;
+    }) => {
+      const targetFile =
+        selectedFile?.file.filename === input.path ? selectedFile.file : null;
+      const currentPatch = renderedPatchesByPath[input.path];
+
+      if (!pullRequest || !targetFile) {
+        return;
+      }
+
+      try {
+        const isTrailingExpansion =
+          input.direction === "after" &&
+          input.hunkIndex === (currentPatch?.hunks.length ?? -1);
+        const data = await getPullRequestHiddenContext(owner, repo, number, {
+          commitOid: pullRequest.headRefOid,
+          path: input.path,
+          anchorLine: input.anchorLine,
+          direction: input.direction,
+          lineCount: input.lineCount
+        });
+        if (isTrailingExpansion) {
+          setTrailingHiddenLinesByPath((currentTrailingLines) => ({
+            ...currentTrailingLines,
+            [input.path]: data.remainingBelow
+          }));
+        }
+        setRenderedPatchesByPath((currentPatches) => {
+          const currentPatch = currentPatches[input.path];
+
+          if (!currentPatch) {
+            return currentPatches;
+          }
+
+            return {
+              ...currentPatches,
+              [input.path]: applyHiddenContextToFileDiff(currentPatch, {
+                hunkIndex: input.hunkIndex,
+                direction: input.direction,
+                lines: data.lines
+              })
+            };
+          });
+      } catch (error) {
+        throw new Error(
+          error instanceof Error ? error.message : "Failed to load hidden context"
+        );
+      }
+    },
+    [number, owner, pullRequest, renderedPatchesByPath, repo, selectedFile]
+  );
+
   return {
     analysisProvider,
     commentCountsByPath: getCommentCountsByPath(),
@@ -349,13 +473,16 @@ export function usePullRequestPageData({
     filesError,
     handleAnalyze,
     handleDiffScrollContainerReady,
+    handleExpandHiddenContext,
     isCommentsLoading,
     isDiffLoading,
     isFilesLoading,
     isPullRequestLoading,
     pullRequest,
     pullRequestError,
+    renderedPatch,
     reviewThreads: getSelectedFileReviewThreads(),
-    selectedFile
+    selectedFile,
+    trailingHiddenLines: selectedPath ? trailingHiddenLinesByPath[selectedPath] ?? 0 : 0
   };
 }

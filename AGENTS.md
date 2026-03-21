@@ -13,6 +13,13 @@
 * API server proxies requests to GitHub APIs
     * GitHub API requests are made through `gh` CLI for no extra GitHub auth process
 
+## Command Notes
+
+* Do not use `pnpm` in this repository.
+* Use `npm` or `npx` instead.
+* For app type-checking, use `npx tsc -p tsconfig.app.json --noEmit`.
+* For project references type-checking, use `npx tsc -b`.
+
 ## Directory Notes
 
 * `src/main.tsx` only bootstraps the router

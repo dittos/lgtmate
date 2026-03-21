@@ -101,6 +101,32 @@ export type GithubPullRequestRestFile = {
   previous_filename?: string;
 };
 
+export type PullRequestHiddenContextDirection = "before" | "after" | "both";
+
+export type PullRequestHiddenContextRequest = {
+  commitOid: string;
+  path: string;
+  anchorLine: number;
+  direction: PullRequestHiddenContextDirection;
+  lineCount: number;
+};
+
+export type PullRequestHiddenContextResponse = {
+  startLine: number;
+  endLine: number;
+  totalLines: number;
+  lines: string[];
+  hasMoreAbove: boolean;
+  hasMoreBelow: boolean;
+  remainingAbove: number;
+  remainingBelow: number;
+};
+
+export type PullRequestFileDiff = {
+  file: GithubPullRequestRestFile;
+  patch: string | null;
+};
+
 export type GithubPullRequestReviewComment = {
   id: string;
   author: {
@@ -525,7 +551,7 @@ export async function getPullRequestFileDiff(
   repo: string,
   number: number,
   path: string
-) {
+): Promise<PullRequestFileDiff> {
   const files = await getPullRequestRestFiles(owner, repo, number);
   const file = files.find((entry) => entry.filename === path);
 
@@ -533,5 +559,28 @@ export async function getPullRequestFileDiff(
     throw new Error("Pull request file diff not found");
   }
 
-  return file;
+  return {
+    file,
+    patch: buildPullRequestFilePatch(file)
+  };
+}
+
+export async function getPullRequestHiddenContext(
+  owner: string,
+  repo: string,
+  number: number,
+  request: PullRequestHiddenContextRequest
+) {
+  const searchParams = new URLSearchParams({
+    commitOid: request.commitOid,
+    path: request.path,
+    anchorLine: String(request.anchorLine),
+    direction: request.direction,
+    lineCount: String(request.lineCount)
+  });
+  const response = await fetchJson<{ ok: true; context: PullRequestHiddenContextResponse }>(
+    `/api/analyzer/pull-requests/${owner}/${repo}/${number}/hidden-context?${searchParams.toString()}`
+  );
+
+  return response.context;
 }
