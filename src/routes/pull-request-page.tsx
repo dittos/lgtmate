@@ -52,82 +52,102 @@ export function PullRequestPage() {
     void setSearchParams(nextParams);
   }
 
+  const isValidPullRequestRoute = !Number.isNaN(number) && Boolean(owner) && Boolean(repo);
+  const repositoryName = isValidPullRequestRoute ? `${owner}/${repo}` : null;
+  const pageTitle = !isValidPullRequestRoute
+    ? "Invalid Pull Request · LGTMate"
+    : pullRequest
+      ? `${pullRequest.title} · Pull Request #${number} · ${repositoryName} · LGTMate`
+      : `Pull Request #${number} · ${repositoryName} · LGTMate`;
+
   if (Number.isNaN(number) || !owner || !repo) {
     return (
-      <main className="flex min-h-0 flex-1 items-center justify-center px-6 text-sm text-destructive">
-        Invalid pull request URL.
-      </main>
+      <>
+        <title>{pageTitle}</title>
+        <main className="flex min-h-0 flex-1 items-center justify-center px-6 text-sm text-destructive">
+          Invalid pull request URL.
+        </main>
+      </>
     );
   }
 
   if (isPullRequestLoading && !pullRequest) {
     return (
-      <main className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">
-        Loading pull request...
-      </main>
+      <>
+        <title>{pageTitle}</title>
+        <main className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">
+          Loading pull request...
+        </main>
+      </>
     );
   }
 
   if (pullRequestError || !pullRequest) {
     return (
-      <main className="flex min-h-0 flex-1 items-center justify-center px-6 text-sm text-destructive">
-        {pullRequestError ?? "Failed to load pull request"}
-      </main>
+      <>
+        <title>{pageTitle}</title>
+        <main className="flex min-h-0 flex-1 items-center justify-center px-6 text-sm text-destructive">
+          {pullRequestError ?? "Failed to load pull request"}
+        </main>
+      </>
     );
   }
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <section className="flex h-full flex-col border border-border/70 bg-card/75 shadow-sm backdrop-blur-md">
-        <PullRequestHeader
-          pullRequest={pullRequest}
-          owner={owner}
-          repo={repo}
-          number={number}
-          provider={analysisProvider}
-          onAnalyze={(nextProvider) => {
-            void handleAnalyze(nextProvider);
-          }}
-        />
-        <PullRequestSplitLayout
-          sidebar={
-            <PullRequestFileSidebar
-              files={files}
-              isLoading={isFilesLoading}
-              error={filesError}
-              commentCountsByPath={commentCountsByPath}
-              owner={owner}
-              repo={repo}
-              number={number}
-              selectedPath={selectedPath}
-              provider={analysisProvider}
-              pullRequestHeadOid={pullRequest.headRefOid}
-              onSelect={handleSelectFile}
-              onSelectDescription={handleSelectDescription}
-              onAnalyze={(nextProvider) => {
-                void handleAnalyze(nextProvider);
-              }}
-            />
-          }
-          content={
-            <PullRequestContent
-              pullRequest={pullRequest}
-              selectedPath={selectedPath}
-              selectedFile={selectedFile}
-              reviewThreads={reviewThreads}
-              isCommentsLoading={isCommentsLoading}
-              commentsError={commentsError}
-              isDiffLoading={isDiffLoading}
-              diffError={diffError}
-              renderedPatch={renderedPatch}
-              trailingHiddenLines={trailingHiddenLines}
-              diffScrollPosition={diffScrollPosition}
-              onExpandHiddenContext={handleExpandHiddenContext}
-              onDiffScrollContainerReady={handleDiffScrollContainerReady}
-            />
-          }
-        />
-      </section>
-    </main>
+    <>
+      <title>{pageTitle}</title>
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <section className="flex h-full flex-col border border-border/70 bg-card/75 shadow-sm backdrop-blur-md">
+          <PullRequestHeader
+            pullRequest={pullRequest}
+            owner={owner}
+            repo={repo}
+            number={number}
+            provider={analysisProvider}
+            onAnalyze={(nextProvider) => {
+              void handleAnalyze(nextProvider);
+            }}
+          />
+          <PullRequestSplitLayout
+            sidebar={
+              <PullRequestFileSidebar
+                files={files}
+                isLoading={isFilesLoading}
+                error={filesError}
+                commentCountsByPath={commentCountsByPath}
+                owner={owner}
+                repo={repo}
+                number={number}
+                selectedPath={selectedPath}
+                provider={analysisProvider}
+                pullRequestHeadOid={pullRequest.headRefOid}
+                onSelect={handleSelectFile}
+                onSelectDescription={handleSelectDescription}
+                onAnalyze={(nextProvider) => {
+                  void handleAnalyze(nextProvider);
+                }}
+              />
+            }
+            content={
+              <PullRequestContent
+                pullRequest={pullRequest}
+                selectedPath={selectedPath}
+                selectedFile={selectedFile}
+                reviewThreads={reviewThreads}
+                isCommentsLoading={isCommentsLoading}
+                commentsError={commentsError}
+                isDiffLoading={isDiffLoading}
+                diffError={diffError}
+                renderedPatch={renderedPatch}
+                trailingHiddenLines={trailingHiddenLines}
+                diffScrollPosition={diffScrollPosition}
+                onExpandHiddenContext={handleExpandHiddenContext}
+                onDiffScrollContainerReady={handleDiffScrollContainerReady}
+              />
+            }
+          />
+        </section>
+      </main>
+    </>
   );
 }
