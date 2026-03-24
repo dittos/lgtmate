@@ -113,6 +113,9 @@ export function usePullRequestPageData({
 }) {
   const [pullRequest, setPullRequest] = useState<GithubPullRequest | null>(null);
   const [files, setFiles] = useState<GithubPullRequestFileNode[]>([]);
+  const [fileDiffsByPath, setFileDiffsByPath] = useState<
+    Record<string, PullRequestFileDiff>
+  >({});
   const [selectedFile, setSelectedFile] = useState<PullRequestFileDiff | null>(
     null
   );
@@ -219,6 +222,18 @@ export function usePullRequestPageData({
 
     let isActive = true;
     const path = selectedPath;
+    const cachedFileDiff = fileDiffsByPath[path];
+    const hasCachedRenderedPatch = Object.prototype.hasOwnProperty.call(
+      renderedPatchesByPath,
+      path
+    );
+
+    if (cachedFileDiff && hasCachedRenderedPatch) {
+      setSelectedFile(cachedFileDiff);
+      setDiffError(null);
+      setIsDiffLoading(false);
+      return;
+    }
 
     async function loadDiff() {
       try {
@@ -251,6 +266,10 @@ export function usePullRequestPageData({
         }
 
         if (isActive) {
+          setFileDiffsByPath((currentDiffs) => ({
+            ...currentDiffs,
+            [path]: nextFile
+          }));
           setSelectedFile(nextFile);
           setRenderedPatchesByPath((currentPatches) => ({
             ...currentPatches,
@@ -285,9 +304,18 @@ export function usePullRequestPageData({
     return () => {
       isActive = false;
     };
-  }, [number, owner, pullRequest?.headRefOid, repo, selectedPath]);
+  }, [
+    fileDiffsByPath,
+    number,
+    owner,
+    pullRequest?.headRefOid,
+    renderedPatchesByPath,
+    repo,
+    selectedPath
+  ]);
 
   useEffect(() => {
+    setFileDiffsByPath({});
     setRenderedPatchesByPath({});
   }, [owner, repo, number]);
 
@@ -375,29 +403,6 @@ export function usePullRequestPageData({
           direction: input.direction,
           lineCount: input.lineCount
         });
-        if (isTrailingExpansion) {
-          setRenderedPatchesByPath((currentPatches) => {
-            const currentPatch = currentPatches[input.path];
-
-            if (!currentPatch) {
-              return currentPatches;
-            }
-
-            return {
-              ...currentPatches,
-              [input.path]: {
-                ...applyHiddenContextToFileDiff(currentPatch, {
-                  hunkIndex: input.hunkIndex,
-                  direction: input.direction,
-                  lines: data.lines
-                }),
-                trailingHiddenLines: data.remainingBelow
-              }
-            };
-          });
-          return;
-        }
-
         setRenderedPatchesByPath((currentPatches) => {
           const currentPatch = currentPatches[input.path];
 
@@ -405,13 +410,20 @@ export function usePullRequestPageData({
             return currentPatches;
           }
 
+          const nextPatch = applyHiddenContextToFileDiff(currentPatch, {
+            hunkIndex: input.hunkIndex,
+            direction: input.direction,
+            lines: data.lines
+          });
+
           return {
             ...currentPatches,
-            [input.path]: applyHiddenContextToFileDiff(currentPatch, {
-              hunkIndex: input.hunkIndex,
-              direction: input.direction,
-              lines: data.lines
-            })
+            [input.path]: isTrailingExpansion
+              ? {
+                  ...nextPatch,
+                  trailingHiddenLines: data.remainingBelow
+                }
+              : nextPatch
           };
         });
       } catch (error) {
