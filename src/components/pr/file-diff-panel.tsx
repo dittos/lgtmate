@@ -27,6 +27,10 @@ import {
   type GithubPullRequestRestFile,
   type PullRequestHiddenContextDirection
 } from "@/lib/github";
+import type {
+  GetDiffScrollPosition,
+  SetDiffScrollPosition
+} from "@/lib/use-diff-scroll-cache";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -77,7 +81,7 @@ type ExpandHiddenContextInput = {
 };
 
 type FileDiffPanelProps = {
-  selectedPath: string | null;
+  selectedPath: string;
   file: GithubPullRequestRestFile | null;
   renderedPatch: RenderedFileDiff | null;
   reviewThreads: GithubPullRequestDiffCommentThread[];
@@ -85,12 +89,13 @@ type FileDiffPanelProps = {
   commentsError: string | null;
   isLoading: boolean;
   error: string | null;
-  savedScrollPosition: { top: number; left: number } | null;
+  getSavedScrollPosition: GetDiffScrollPosition;
+  onSaveScrollPosition: SetDiffScrollPosition;
   onExpandHiddenContext: (input: ExpandHiddenContextInput) => Promise<void>;
-  onScrollContainerReady: (element: HTMLDivElement | null) => void;
 };
 
 type RenderedPatchDiffProps = {
+  renderIdentity: string;
   filePath: string;
   renderedPatch: RenderedFileDiff;
   diffStyle: DiffStyle;
@@ -130,17 +135,13 @@ export function FileDiffPanel({
   commentsError,
   isLoading,
   error,
-  savedScrollPosition,
+  getSavedScrollPosition,
+  onSaveScrollPosition,
   onExpandHiddenContext,
-  onScrollContainerReady
 }: FileDiffPanelProps) {
   const { theme } = useTheme();
   const [diffStyle, setDiffStyle] = useState<DiffStyle>(() => getStoredDiffStyle());
-  const [renderVersion, setRenderVersion] = useState(0);
   const diffContainerRef = useRef<HTMLDivElement | null>(null);
-  const handlePatchRender = useCallback(() => {
-    setRenderVersion((currentVersion) => currentVersion + 1);
-  }, []);
   const lineAnnotations = useMemo<DiffLineAnnotation<DiffCommentAnnotation>[]>(
     () =>
       reviewThreads.map((thread) => ({
@@ -161,41 +162,35 @@ export function FileDiffPanel({
     window.localStorage.setItem(DIFF_STYLE_STORAGE_KEY, diffStyle);
   }, [diffStyle]);
 
-  const handleDiffContainerRef = useCallback(
-    (element: HTMLDivElement | null) => {
-      diffContainerRef.current = element;
-      onScrollContainerReady(element);
-    },
-    [onScrollContainerReady]
-  );
+  const saveScrollPosition = useCallback(() => {
+    const container = diffContainerRef.current;
 
-  useLayoutEffect(() => {
-    if (
-      !selectedPath ||
-      isLoading ||
-      error ||
-      !file ||
-      !renderedPatch ||
-      !diffContainerRef.current
-    ) {
+    if (!container) {
       return;
     }
 
-    let frameId = window.requestAnimationFrame(() => {
-      const container = diffContainerRef.current;
-
-      if (!container) {
-        return;
-      }
-
-      container.scrollTop = savedScrollPosition?.top ?? 0;
-      container.scrollLeft = savedScrollPosition?.left ?? 0;
+    onSaveScrollPosition(selectedPath, {
+      top: container.scrollTop,
+      left: container.scrollLeft
     });
+  }, [onSaveScrollPosition, selectedPath]);
 
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [selectedPath, isLoading, error, file, renderedPatch, savedScrollPosition, renderVersion]);
+  const handlePatchRender = useCallback(() => {
+    if (isLoading || error || !file || !renderedPatch) {
+      return;
+    }
+
+    const container = diffContainerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    const savedScrollPosition = getSavedScrollPosition(selectedPath);
+
+    container.scrollTop = savedScrollPosition?.top ?? 0;
+    container.scrollLeft = savedScrollPosition?.left ?? 0;
+  }, [selectedPath, getSavedScrollPosition, isLoading, error, file, renderedPatch]);
 
   if (isLoading) {
     return (
@@ -316,10 +311,12 @@ export function FileDiffPanel({
         </div>
       ) : null}
       <div
-        ref={handleDiffContainerRef}
+        ref={diffContainerRef}
         className="diff-frame min-h-0 flex-1 overflow-auto rounded-2xl border border-border/70 bg-background/80 shadow-sm"
+        onScroll={saveScrollPosition}
       >
         <RenderedPatchDiff
+          renderIdentity={selectedPath}
           filePath={file.filename}
           renderedPatch={renderedPatch}
           diffStyle={diffStyle}
@@ -335,6 +332,7 @@ export function FileDiffPanel({
 }
 
 function RenderedPatchDiff({
+  renderIdentity,
   filePath,
   renderedPatch,
   diffStyle,
@@ -350,6 +348,8 @@ function RenderedPatchDiff({
   );
   const instanceRef = useRef<DiffsFileDiff<DiffCommentAnnotation> | null>(null);
   const hostElementRef = useRef<HTMLElement | null>(null);
+  const lastRenderedIdentityRef = useRef<string | null>(null);
+  const renderFrameIdRef = useRef<number | null>(null);
   const diffRendererOptions = useMemo(
     () => getDiffRendererOptions(diffStyle, theme),
     [diffStyle, theme]
@@ -384,16 +384,33 @@ function RenderedPatchDiff({
       forceRender: false,
       lineAnnotations
     });
-    onRender();
+
+    if (lastRenderedIdentityRef.current !== renderIdentity) {
+      lastRenderedIdentityRef.current = renderIdentity;
+
+      if (renderFrameIdRef.current !== null) {
+        window.cancelAnimationFrame(renderFrameIdRef.current);
+      }
+
+      renderFrameIdRef.current = window.requestAnimationFrame(() => {
+        renderFrameIdRef.current = null;
+        onRender();
+      });
+    }
   }, [
     diffRendererOptions,
     lineAnnotations,
     onRender,
+    renderIdentity,
     renderedPatch,
   ]);
 
   useEffect(() => {
     return () => {
+      if (renderFrameIdRef.current !== null) {
+        window.cancelAnimationFrame(renderFrameIdRef.current);
+      }
+
       instanceRef.current?.cleanUp();
       instanceRef.current = null;
     };

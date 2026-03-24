@@ -3,6 +3,7 @@ import { PullRequestContent } from "@/components/pr/pull-request-content";
 import { PullRequestFileSidebar } from "@/components/pr/pull-request-file-sidebar";
 import { PullRequestHeader } from "@/components/pr/pull-request-header";
 import { PullRequestSplitLayout } from "@/components/pr/pull-request-split-layout";
+import { useDiffScrollCache } from "@/lib/use-diff-scroll-cache";
 import { usePullRequestPageData } from "./use-pull-request-page-data";
 
 export function PullRequestPage() {
@@ -17,11 +18,9 @@ export function PullRequestPage() {
     commentCountsByPath,
     commentsError,
     diffError,
-    diffScrollPosition,
     files,
     filesError,
     handleAnalyze,
-    handleDiffScrollContainerReady,
     handleExpandHiddenContext,
     isCommentsLoading,
     isDiffLoading,
@@ -38,6 +37,9 @@ export function PullRequestPage() {
     number,
     selectedPath
   });
+  const { getDiffScrollPosition, setDiffScrollPosition } = useDiffScrollCache(
+    `${owner}/${repo}#${number}`
+  );
 
   function handleSelectFile(path: string) {
     const nextParams = new URLSearchParams(searchParams);
@@ -138,9 +140,9 @@ export function PullRequestPage() {
                 isDiffLoading={isDiffLoading}
                 diffError={diffError}
                 renderedPatch={renderedPatch}
-                diffScrollPosition={diffScrollPosition}
+                getDiffScrollPosition={getDiffScrollPosition}
+                setDiffScrollPosition={setDiffScrollPosition}
                 onExpandHiddenContext={handleExpandHiddenContext}
-                onDiffScrollContainerReady={handleDiffScrollContainerReady}
               />
             }
           />

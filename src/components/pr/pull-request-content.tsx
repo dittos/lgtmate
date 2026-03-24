@@ -5,6 +5,10 @@ import {
   type PullRequestFileDiff,
   type PullRequestHiddenContextDirection
 } from "@/lib/github";
+import type {
+  GetDiffScrollPosition,
+  SetDiffScrollPosition
+} from "@/lib/use-diff-scroll-cache";
 import { FileDiffPanel } from "./file-diff-panel";
 import { PullRequestDescription } from "./pull-request-description";
 
@@ -18,9 +22,9 @@ export function PullRequestContent({
   isDiffLoading,
   diffError,
   renderedPatch,
-  diffScrollPosition,
+  getDiffScrollPosition,
+  setDiffScrollPosition,
   onExpandHiddenContext,
-  onDiffScrollContainerReady
 }: {
   pullRequest: GithubPullRequest;
   selectedPath: string | null;
@@ -31,7 +35,8 @@ export function PullRequestContent({
   isDiffLoading: boolean;
   diffError: string | null;
   renderedPatch: RenderedFileDiff | null;
-  diffScrollPosition: { top: number; left: number } | null;
+  getDiffScrollPosition: GetDiffScrollPosition;
+  setDiffScrollPosition: SetDiffScrollPosition;
   onExpandHiddenContext: (input: {
     path: string;
     anchorLine: number;
@@ -39,7 +44,6 @@ export function PullRequestContent({
     hunkIndex: number;
     lineCount: number;
   }) => Promise<void>;
-  onDiffScrollContainerReady: (element: HTMLDivElement | null) => void;
 }) {
   if (selectedPath) {
     return (
@@ -52,9 +56,9 @@ export function PullRequestContent({
         commentsError={commentsError}
         isLoading={isDiffLoading}
         error={diffError}
-        savedScrollPosition={diffScrollPosition}
+        getSavedScrollPosition={getDiffScrollPosition}
+        onSaveScrollPosition={setDiffScrollPosition}
         onExpandHiddenContext={onExpandHiddenContext}
-        onScrollContainerReady={onDiffScrollContainerReady}
       />
     );
   }
