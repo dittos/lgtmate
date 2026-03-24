@@ -349,6 +349,10 @@ function RenderedPatchDiff({
   const instanceRef = useRef<DiffsFileDiff<DiffCommentAnnotation> | null>(null);
   const hostElementRef = useRef<HTMLElement | null>(null);
   const lastRenderedIdentityRef = useRef<string | null>(null);
+  const lastRendererOptionsRef = useRef<{
+    diffStyle: DiffStyle;
+    theme: "light" | "dark";
+  } | null>(null);
   const renderFrameIdRef = useRef<number | null>(null);
   const diffRendererOptions = useMemo(
     () => getDiffRendererOptions(diffStyle, theme),
@@ -378,12 +382,21 @@ function RenderedPatchDiff({
       });
     }
 
+    const shouldForceRender =
+      lastRendererOptionsRef.current == null ||
+      lastRendererOptionsRef.current.diffStyle !== diffStyle ||
+      lastRendererOptionsRef.current.theme !== theme;
+
     instance.render({
       fileContainer: hostElement,
       fileDiff: renderedPatch,
-      forceRender: false,
+      forceRender: shouldForceRender,
       lineAnnotations
     });
+    lastRendererOptionsRef.current = {
+      diffStyle,
+      theme
+    };
 
     if (lastRenderedIdentityRef.current !== renderIdentity) {
       lastRenderedIdentityRef.current = renderIdentity;
