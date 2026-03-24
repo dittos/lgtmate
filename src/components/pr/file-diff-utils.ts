@@ -6,6 +6,10 @@ import {
 import type { FileDiffMetadata } from "@pierre/diffs/react";
 import type { PullRequestHiddenContextDirection } from "@/lib/github";
 
+export type RenderedFileDiff = FileDiffMetadata & {
+  trailingHiddenLines: number;
+};
+
 export type AppliedHiddenContext = {
   hunkIndex: number;
   direction: PullRequestHiddenContextDirection;
@@ -25,10 +29,20 @@ export type HiddenContextSeparatorSlot = {
   expandActions: HiddenContextExpandAction[];
 };
 
+export type TrailingHiddenContextSeparator = Pick<
+  HiddenContextSeparatorSlot,
+  "hunkIndex" | "lines" | "type" | "expandActions"
+>;
+
+export type HiddenContextSeparators = {
+  slots: HiddenContextSeparatorSlot[];
+  trailingHiddenContext: TrailingHiddenContextSeparator | null;
+};
+
 export function getHiddenContextSeparatorSlots(
-  fileDiff: FileDiffMetadata,
+  fileDiff: FileDiffMetadata | RenderedFileDiff,
   diffStyle: "unified" | "split"
-): HiddenContextSeparatorSlot[] {
+): HiddenContextSeparators {
   const slotTypes: HiddenContextSeparatorSlot["type"][] =
     diffStyle === "unified" ? ["unified"] : ["deletions", "additions"];
   const slots: HiddenContextSeparatorSlot[] = [];
@@ -64,13 +78,34 @@ export function getHiddenContextSeparatorSlots(
     previousEnd = hunk.additionStart + hunk.additionCount - 1;
   }
 
-  return slots;
+  const trailingHiddenLines =
+    "trailingHiddenLines" in fileDiff ? fileDiff.trailingHiddenLines : 0;
+  const lastHunk = fileDiff.hunks.at(-1);
+  const trailingHiddenContext =
+    trailingHiddenLines > 0 && lastHunk
+      ? {
+          hunkIndex: fileDiff.hunks.length,
+          lines: trailingHiddenLines,
+          type: "unified" as const,
+          expandActions: [
+            {
+              anchorLine: lastHunk.additionStart + lastHunk.additionCount,
+              direction: "after"
+            } satisfies HiddenContextExpandAction
+          ]
+        }
+      : null;
+
+  return {
+    slots,
+    trailingHiddenContext
+  };
 }
 
-export function applyHiddenContextToFileDiff(
-  baseFileDiff: FileDiffMetadata,
+export function applyHiddenContextToFileDiff<T extends FileDiffMetadata>(
+  baseFileDiff: T,
   hiddenContext: AppliedHiddenContext
-): FileDiffMetadata {
+): T {
   if (hiddenContext.lines.length < 1) {
     return baseFileDiff;
   }
@@ -80,7 +115,7 @@ export function applyHiddenContextToFileDiff(
   return nextFileDiff;
 }
 
-function cloneFileDiff(fileDiff: FileDiffMetadata): FileDiffMetadata {
+function cloneFileDiff<T extends FileDiffMetadata>(fileDiff: T): T {
   return {
     ...fileDiff,
     hunks: fileDiff.hunks.map((hunk) => ({
@@ -89,7 +124,7 @@ function cloneFileDiff(fileDiff: FileDiffMetadata): FileDiffMetadata {
     })),
     deletionLines: [...fileDiff.deletionLines],
     additionLines: [...fileDiff.additionLines]
-  };
+  } as T;
 }
 
 function applyHiddenContextMutation(

@@ -1,4 +1,4 @@
-import type { FileDiffMetadata } from "@pierre/diffs/react";
+import type { RenderedFileDiff } from "@/components/pr/file-diff-utils";
 import {
   type GithubPullRequest,
   type GithubPullRequestDiffCommentThread,
@@ -18,7 +18,6 @@ export function PullRequestContent({
   isDiffLoading,
   diffError,
   renderedPatch,
-  trailingHiddenLines,
   diffScrollPosition,
   onExpandHiddenContext,
   onDiffScrollContainerReady
@@ -31,8 +30,7 @@ export function PullRequestContent({
   commentsError: string | null;
   isDiffLoading: boolean;
   diffError: string | null;
-  renderedPatch: FileDiffMetadata | null;
-  trailingHiddenLines: number;
+  renderedPatch: RenderedFileDiff | null;
   diffScrollPosition: { top: number; left: number } | null;
   onExpandHiddenContext: (input: {
     path: string;
@@ -49,7 +47,6 @@ export function PullRequestContent({
         selectedPath={selectedPath}
         file={selectedFile?.file ?? null}
         renderedPatch={renderedPatch}
-        trailingHiddenLines={trailingHiddenLines}
         reviewThreads={reviewThreads}
         isCommentsLoading={isCommentsLoading}
         commentsError={commentsError}

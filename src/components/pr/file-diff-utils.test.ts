@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyHiddenContextToFileDiff,
   getHiddenContextSeparatorSlots,
+  type RenderedFileDiff,
 } from "./file-diff-utils";
 
 function createFileDiff(): FileDiffMetadata {
@@ -172,7 +173,10 @@ function createFileDiffWithThreeLineGap(): FileDiffMetadata {
 
 describe("getHiddenContextSeparatorSlots", () => {
   it("creates one separator per hidden region for unified diffs", () => {
-    const slots = getHiddenContextSeparatorSlots(createFileDiff(), "unified");
+    const { slots, trailingHiddenContext } = getHiddenContextSeparatorSlots(
+      createFileDiff(),
+      "unified"
+    );
 
     expect(slots).toEqual([
       {
@@ -204,10 +208,14 @@ describe("getHiddenContextSeparatorSlots", () => {
         ]
       }
     ]);
+    expect(trailingHiddenContext).toBeNull();
   });
 
   it("creates paired separators for split diffs", () => {
-    const slots = getHiddenContextSeparatorSlots(createFileDiff(), "split");
+    const { slots, trailingHiddenContext } = getHiddenContextSeparatorSlots(
+      createFileDiff(),
+      "split"
+    );
 
     expect(slots).toHaveLength(4);
     expect(slots.map((slot) => slot.type)).toEqual([
@@ -218,6 +226,30 @@ describe("getHiddenContextSeparatorSlots", () => {
     ]);
     expect(slots[0]?.slotName).toBe(getHunkSeparatorSlotName("deletions", 0));
     expect(slots[3]?.slotName).toBe(getHunkSeparatorSlotName("additions", 1));
+    expect(trailingHiddenContext).toBeNull();
+  });
+
+  it("returns trailing hidden context for rendered file diffs", () => {
+    const { slots, trailingHiddenContext } = getHiddenContextSeparatorSlots(
+      {
+        ...createFileDiff(),
+        trailingHiddenLines: 3
+      },
+      "unified"
+    );
+
+    expect(slots).toHaveLength(2);
+    expect(trailingHiddenContext).toEqual({
+      hunkIndex: 2,
+      lines: 3,
+      type: "unified",
+      expandActions: [
+        {
+          anchorLine: 12,
+          direction: "after"
+        }
+      ]
+    });
   });
 });
 
@@ -487,5 +519,20 @@ describe("applyHiddenContextToFileDiff", () => {
         deletionLineIndex: 8
       }
     ]);
+  });
+
+  it("preserves extra metadata on extended file diff types", () => {
+    const baseFileDiff: RenderedFileDiff = {
+      ...createFileDiff(),
+      trailingHiddenLines: 3
+    };
+
+    const nextFileDiff = applyHiddenContextToFileDiff(baseFileDiff, {
+      hunkIndex: 2,
+      direction: "after",
+      lines: ["after-12"]
+    });
+
+    expect(nextFileDiff.trailingHiddenLines).toBe(3);
   });
 });

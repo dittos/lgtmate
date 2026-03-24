@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { getSingularPatch } from "@pierre/diffs";
 import type { FileDiffMetadata } from "@pierre/diffs/react";
-import { applyHiddenContextToFileDiff } from "@/components/pr/file-diff-utils";
+import {
+  applyHiddenContextToFileDiff,
+  type RenderedFileDiff
+} from "@/components/pr/file-diff-utils";
 import type { AnalyzerProvider } from "@/lib/analyzer";
 import {
   getAnalysisController,
@@ -132,10 +135,7 @@ export function usePullRequestPageData({
     Record<string, DiffScrollPosition>
   >({});
   const [renderedPatchesByPath, setRenderedPatchesByPath] = useState<
-    Record<string, FileDiffMetadata | null>
-  >({});
-  const [trailingHiddenLinesByPath, setTrailingHiddenLinesByPath] = useState<
-    Record<string, number>
+    Record<string, RenderedFileDiff | null>
   >({});
   const [lastUsedAnalysisProvider, setLastUsedAnalysisProvider] =
     useState<AnalyzerProvider | null>(() => getStoredLastAnalysisProvider());
@@ -264,10 +264,11 @@ export function usePullRequestPageData({
           setRenderedPatchesByPath((currentPatches) => ({
             ...currentPatches,
             [path]: nextRenderedPatch
-          }));
-          setTrailingHiddenLinesByPath((currentTrailingLines) => ({
-            ...currentTrailingLines,
-            [path]: trailingHiddenLines
+              ? {
+                  ...nextRenderedPatch,
+                  trailingHiddenLines
+                }
+              : null
           }));
         }
       } catch (error) {
@@ -276,10 +277,6 @@ export function usePullRequestPageData({
           setRenderedPatchesByPath((currentPatches) => ({
             ...currentPatches,
             [path]: null
-          }));
-          setTrailingHiddenLinesByPath((currentTrailingLines) => ({
-            ...currentTrailingLines,
-            [path]: 0
           }));
           setDiffError(
             error instanceof Error ? error.message : "Failed to load file diff"
@@ -302,7 +299,6 @@ export function usePullRequestPageData({
   useEffect(() => {
     setDiffScrollPositions({});
     setRenderedPatchesByPath({});
-    setTrailingHiddenLinesByPath({});
     diffScrollContainerRef.current = null;
   }, [owner, repo, number]);
 
@@ -433,11 +429,28 @@ export function usePullRequestPageData({
           lineCount: input.lineCount
         });
         if (isTrailingExpansion) {
-          setTrailingHiddenLinesByPath((currentTrailingLines) => ({
-            ...currentTrailingLines,
-            [input.path]: data.remainingBelow
-          }));
+          setRenderedPatchesByPath((currentPatches) => {
+            const currentPatch = currentPatches[input.path];
+
+            if (!currentPatch) {
+              return currentPatches;
+            }
+
+            return {
+              ...currentPatches,
+              [input.path]: {
+                ...applyHiddenContextToFileDiff(currentPatch, {
+                  hunkIndex: input.hunkIndex,
+                  direction: input.direction,
+                  lines: data.lines
+                }),
+                trailingHiddenLines: data.remainingBelow
+              }
+            };
+          });
+          return;
         }
+
         setRenderedPatchesByPath((currentPatches) => {
           const currentPatch = currentPatches[input.path];
 
@@ -445,15 +458,15 @@ export function usePullRequestPageData({
             return currentPatches;
           }
 
-            return {
-              ...currentPatches,
-              [input.path]: applyHiddenContextToFileDiff(currentPatch, {
-                hunkIndex: input.hunkIndex,
-                direction: input.direction,
-                lines: data.lines
-              })
-            };
-          });
+          return {
+            ...currentPatches,
+            [input.path]: applyHiddenContextToFileDiff(currentPatch, {
+              hunkIndex: input.hunkIndex,
+              direction: input.direction,
+              lines: data.lines
+            })
+          };
+        });
       } catch (error) {
         throw new Error(
           error instanceof Error ? error.message : "Failed to load hidden context"
@@ -482,7 +495,6 @@ export function usePullRequestPageData({
     pullRequestError,
     renderedPatch,
     reviewThreads: getSelectedFileReviewThreads(),
-    selectedFile,
-    trailingHiddenLines: selectedPath ? trailingHiddenLinesByPath[selectedPath] ?? 0 : 0
+    selectedFile
   };
 }

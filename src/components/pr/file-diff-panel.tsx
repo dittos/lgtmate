@@ -13,13 +13,13 @@ import {
   getLineAnnotationName,
 } from "@pierre/diffs";
 import { ArrowDownFromLine, ArrowUpFromLine, Columns2, ExternalLink, Rows3, SeparatorHorizontal } from "lucide-react";
-import type { DiffLineAnnotation, FileDiffMetadata } from "@pierre/diffs/react";
+import type { DiffLineAnnotation } from "@pierre/diffs/react";
 import { Button } from "@/components/ui/button";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import {
   getHiddenContextSeparatorSlots,
-  type HiddenContextExpandAction,
   type HiddenContextSeparatorSlot,
+  type RenderedFileDiff,
 } from "@/components/pr/file-diff-utils";
 import {
   formatChangeType,
@@ -79,8 +79,7 @@ type ExpandHiddenContextInput = {
 type FileDiffPanelProps = {
   selectedPath: string | null;
   file: GithubPullRequestRestFile | null;
-  renderedPatch: FileDiffMetadata | null;
-  trailingHiddenLines: number;
+  renderedPatch: RenderedFileDiff | null;
   reviewThreads: GithubPullRequestDiffCommentThread[];
   isCommentsLoading: boolean;
   commentsError: string | null;
@@ -93,8 +92,7 @@ type FileDiffPanelProps = {
 
 type RenderedPatchDiffProps = {
   filePath: string;
-  renderedPatch: FileDiffMetadata;
-  trailingHiddenLines: number;
+  renderedPatch: RenderedFileDiff;
   diffStyle: DiffStyle;
   theme: "light" | "dark";
   lineAnnotations: DiffLineAnnotation<DiffCommentAnnotation>[];
@@ -127,7 +125,6 @@ export function FileDiffPanel({
   selectedPath,
   file,
   renderedPatch,
-  trailingHiddenLines,
   reviewThreads,
   isCommentsLoading,
   commentsError,
@@ -325,7 +322,6 @@ export function FileDiffPanel({
         <RenderedPatchDiff
           filePath={file.filename}
           renderedPatch={renderedPatch}
-          trailingHiddenLines={trailingHiddenLines}
           diffStyle={diffStyle}
           theme={theme}
           lineAnnotations={lineAnnotations}
@@ -341,7 +337,6 @@ export function FileDiffPanel({
 function RenderedPatchDiff({
   filePath,
   renderedPatch,
-  trailingHiddenLines,
   diffStyle,
   theme,
   lineAnnotations,
@@ -349,33 +344,10 @@ function RenderedPatchDiff({
   onExpandHiddenContext,
   onRender
 }: RenderedPatchDiffProps) {
-  const hiddenContextSlots = useMemo(
+  const { slots: hiddenContextSlots, trailingHiddenContext } = useMemo(
     () => getHiddenContextSeparatorSlots(renderedPatch, diffStyle),
     [diffStyle, renderedPatch]
   );
-  const trailingHiddenContext = useMemo(() => {
-    if (trailingHiddenLines < 1) {
-      return null;
-    }
-
-    const lastHunk = renderedPatch.hunks.at(-1);
-
-    if (!lastHunk) {
-      return null;
-    }
-
-    return {
-      hunkIndex: renderedPatch.hunks.length,
-      lines: trailingHiddenLines,
-      type: "unified" as const,
-      expandActions: [
-        {
-          anchorLine: lastHunk.additionStart + lastHunk.additionCount,
-          direction: "after"
-        } satisfies HiddenContextExpandAction
-      ]
-    };
-  }, [renderedPatch, trailingHiddenLines]);
   const instanceRef = useRef<DiffsFileDiff<DiffCommentAnnotation> | null>(null);
   const hostElementRef = useRef<HTMLElement | null>(null);
   const diffRendererOptions = useMemo(
