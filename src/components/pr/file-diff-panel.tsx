@@ -494,8 +494,9 @@ function HiddenContextSeparator({
 }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   const actionButtons = useMemo(() => {
-    const iconProps = {className: "size-3.5"};
+    const iconProps = { className: "size-3.5" };
 
     if (hunk.expandActions.length === 1) {
       const [action] = hunk.expandActions;
@@ -536,33 +537,63 @@ function HiddenContextSeparator({
     }));
   }, [hunk]);
 
+  const isSingleAction = actionButtons.length === 1;
+  const singleAction = isSingleAction ? actionButtons[0] : null;
+
+  const handleExpand = useCallback(
+    (action: (typeof actionButtons)[number]) => {
+      setIsLoading(true);
+      setError(null);
+
+      void onExpand({
+        hunkIndex: hunk.hunkIndex,
+        direction: action.direction,
+        anchorLine: action.anchorLine,
+        lineCount: action.lineCount
+      })
+        .catch((nextError: unknown) => {
+          setError(
+            nextError instanceof Error
+              ? nextError.message
+              : "Failed to load hidden context"
+          );
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    },
+    [hunk.hunkIndex, onExpand]
+  );
+
+  const handleSingleActionClick = useCallback(() => {
+    if (!singleAction) {
+      return;
+    }
+
+    handleExpand(singleAction);
+  }, [handleExpand, singleAction]);
+
+  const hiddenLineLabel = isLoading ? "Loading..." : `${hunk.lines} hidden lines`;
+  const actionButtonClassName = cn(
+    "inline-flex h-5 w-full cursor-pointer items-center justify-end rounded-sm pe-2 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60",
+    isSingleAction && "group-hover:text-foreground"
+  );
+  const hiddenLineLabelClassName = cn(
+    "whitespace-nowrap text-xs text-muted-foreground",
+    isSingleAction && "cursor-pointer hover:text-foreground group-hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+  );
+
   return (
-    <div className={cn("flex", isLast ? "pb-2" : "py-1")}>
-      <div className="w-11 flex flex-col">
+    <div className={cn("group flex", isLast ? "pb-2" : "py-1")}>
+      <div className="flex w-11 flex-col">
         {actionButtons.map((action) => (
           <button
-            key={`${action.direction}-${action.label}`}
+            key={`${action.direction}-${action.anchorLine}`}
             type="button"
-            className="w-full inline-flex justify-end items-center pe-2 h-5 rounded-sm cursor-pointer text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"              disabled={isLoading}
+            className={actionButtonClassName}
+            disabled={isLoading}
             onClick={() => {
-              setIsLoading(true);
-              setError(null);
-              void onExpand({
-                hunkIndex: hunk.hunkIndex,
-                direction: action.direction,
-                anchorLine: action.anchorLine,
-                lineCount: action.lineCount
-              })
-                .catch((nextError: unknown) => {
-                  setError(
-                    nextError instanceof Error
-                      ? nextError.message
-                      : "Failed to load hidden context"
-                  );
-                })
-                .finally(() => {
-                  setIsLoading(false);
-                });
+              handleExpand(action);
             }}
           >
             {action.label}
@@ -570,10 +601,21 @@ function HiddenContextSeparator({
         ))}
       </div>
       <div className="relative">
-        <div className="h-full pl-2 flex items-center absolute">
-          <div className="text-xs text-muted-foreground whitespace-nowrap">
-            {isLoading ? "Loading..." : <span>{hunk.lines} hidden lines</span>}
-          </div>
+        <div className="absolute flex h-full items-center pl-2">
+          {isSingleAction ? (
+            <button
+              type="button"
+              className={hiddenLineLabelClassName}
+              disabled={isLoading}
+              onClick={handleSingleActionClick}
+            >
+              {hiddenLineLabel}
+            </button>
+          ) : (
+            <div className={hiddenLineLabelClassName}>
+              {hiddenLineLabel}
+            </div>
+          )}
           {error ? (
             <div className="pl-2 text-xs font-bold text-destructive whitespace-nowrap">
               {error}
