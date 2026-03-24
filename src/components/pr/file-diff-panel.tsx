@@ -12,7 +12,7 @@ import {
   FileDiff as DiffsFileDiff,
   getLineAnnotationName,
 } from "@pierre/diffs";
-import { Columns2, ExternalLink, Rows3 } from "lucide-react";
+import { ArrowDownFromLine, ArrowUpFromLine, Columns2, ExternalLink, Rows3, SeparatorHorizontal } from "lucide-react";
 import type { DiffLineAnnotation, FileDiffMetadata } from "@pierre/diffs/react";
 import { Button } from "@/components/ui/button";
 import { TruncatedText } from "@/components/ui/truncated-text";
@@ -31,7 +31,6 @@ import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 const DIFF_STYLE_STORAGE_KEY = "lgtmate-diff-style";
-const HIDDEN_CONTEXT_SEPARATOR_HEIGHT_CLASS = "h-16";
 const HIDDEN_CONTEXT_PAGE_SIZE = 20;
 
 let diffsContainerRegistered = false;
@@ -456,42 +455,35 @@ function RenderedPatchDiff({
               </div>
             );
           })}
-          {hiddenContextSlots.map((slot) => (
+          {hiddenContextSlots.filter((slot) => slot.type !== "additions").map((slot) => (
             <div
               key={slot.slotName}
               slot={slot.slotName}
-              className={cn(
-                "relative block min-w-0 overflow-visible",
-                HIDDEN_CONTEXT_SEPARATOR_HEIGHT_CLASS
-              )}
             >
-              <div className="absolute inset-x-0 top-0 flex justify-start">
-                <HiddenContextSeparator
-                  hunk={slot}
-                  onExpand={(action) =>
-                    onExpandHiddenContext({
-                      path: filePath,
-                      ...action
-                    })
-                  }
-                />
-              </div>
+              <HiddenContextSeparator
+                hunk={slot}
+                onExpand={(action) =>
+                  onExpandHiddenContext({
+                    path: filePath,
+                    ...action
+                  })
+                }
+              />
             </div>
           ))}
         </>
       )}
       {trailingHiddenContext ? (
-        <div className="min-w-full px-3 pb-3">
-          <HiddenContextSeparator
-            hunk={trailingHiddenContext}
-            onExpand={(action) =>
-              onExpandHiddenContext({
-                path: filePath,
-                ...action
-              })
-            }
-          />
-        </div>
+        <HiddenContextSeparator
+          hunk={trailingHiddenContext}
+          isLast={true}
+          onExpand={(action) =>
+            onExpandHiddenContext({
+              path: filePath,
+              ...action
+            })
+          }
+        />
       ) : null}
     </>
   );
@@ -499,9 +491,11 @@ function RenderedPatchDiff({
 
 function HiddenContextSeparator({
   hunk,
+  isLast = false,
   onExpand
 }: {
   hunk: Pick<HiddenContextSeparatorSlot, "hunkIndex" | "lines" | "type" | "expandActions">;
+  isLast?: boolean;
   onExpand: (action: {
     hunkIndex: number;
     direction: PullRequestHiddenContextDirection;
@@ -512,6 +506,8 @@ function HiddenContextSeparator({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const actionButtons = useMemo(() => {
+    const iconProps = {className: "size-3.5"};
+
     if (hunk.expandActions.length === 1) {
       const [action] = hunk.expandActions;
 
@@ -522,7 +518,7 @@ function HiddenContextSeparator({
       return [
         {
           ...action,
-          label: action.direction === "before" ? "Expand Up" : "Expand Down",
+          label: action.direction === "before" ? <ArrowUpFromLine {...iconProps} /> : <ArrowDownFromLine {...iconProps} />,
           lineCount: Math.min(hunk.lines, HIDDEN_CONTEXT_PAGE_SIZE)
         }
       ];
@@ -538,7 +534,7 @@ function HiddenContextSeparator({
       return [
         {
           ...downAction,
-          label: "Expand Both",
+          label: <SeparatorHorizontal {...iconProps} />,
           lineCount: hunk.lines
         }
       ];
@@ -546,25 +542,19 @@ function HiddenContextSeparator({
 
     return hunk.expandActions.map((action) => ({
       ...action,
-      label: action.direction === "after" ? "Expand Up" : "Expand Down",
+      label: action.direction === "after" ? <ArrowDownFromLine {...iconProps} /> : <ArrowUpFromLine {...iconProps} />,
       lineCount: HIDDEN_CONTEXT_PAGE_SIZE
     }));
   }, [hunk]);
 
-  if (hunk.type === "additions") {
-    return <div className="h-full w-0 min-w-0" aria-hidden="true" />;
-  }
-
   return (
-    <div className="my-2 ml-3 mr-0 inline-block max-w-[calc(100%-0.75rem)] rounded-xl border border-dashed border-border/70 bg-muted/35 px-3 py-2 font-sans align-top">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span>{hunk.lines} hidden lines</span>
+    <div className={cn("flex", isLast ? "pb-2" : "py-1")}>
+      <div className="w-11 flex flex-col">
         {actionButtons.map((action) => (
           <button
             key={`${action.direction}-${action.label}`}
             type="button"
-            className="inline-flex items-center rounded-md border border-border/70 bg-background px-2 py-1 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isLoading}
+            className="w-full inline-flex justify-end items-center pe-2 h-5 rounded-sm cursor-pointer text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"              disabled={isLoading}
             onClick={() => {
               setIsLoading(true);
               setError(null);
@@ -586,15 +576,22 @@ function HiddenContextSeparator({
                 });
             }}
           >
-            {isLoading ? "Loading..." : action.label}
+            {action.label}
           </button>
         ))}
       </div>
-      {error ? (
-        <div className="mt-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {error}
+      <div className="relative">
+        <div className="h-full pl-2 flex items-center absolute">
+          <div className="text-xs text-muted-foreground whitespace-nowrap">
+            {isLoading ? "Loading..." : <span>{hunk.lines} hidden lines</span>}
+          </div>
+          {error ? (
+            <div className="pl-2 text-xs font-bold text-destructive whitespace-nowrap">
+              {error}
+            </div>
+          ) : null}
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }
